@@ -1,0 +1,106 @@
+{% set page_name = "插件测试" %}
+{% extends "layout/basic.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="medium-12 columns">
+    <div class="section">
+      <div class="section__header">
+        <h1 class="section__title">Phosphorus 抄袭检测插件测试页面</h1>
+      </div>
+      <div class="section__body">
+        <div class="typo">
+          <h2>插件状态检查</h2>
+          
+          <div id="status-check">
+            <h3>✅ 插件加载状态</h3>
+            <p>如果您看到这个页面，说明插件已成功加载到 Hydro 系统中。</p>
+            
+            <h3>🔗 API 连接测试</h3>
+            <p>点击下面的按钮测试与 Phosphorus 后端的连接：</p>
+            <button id="test-api" class="rounded primary button">测试 API 连接</button>
+            <div id="api-result" style="margin-top: 10px;"></div>
+            
+            <h3>📝 使用说明</h3>
+            <ol>
+              <li>确保 Phosphorus 后端服务正在运行（默认端口 8000）</li>
+              <li>在比赛管理页面寻找 "抄袭检测" 入口</li>
+              <li>上传比赛提交数据到 MongoDB</li>
+              <li>运行抄袭检测分析</li>
+              <li>查看详细的检测结果</li>
+            </ol>
+            
+            <h3>🔧 配置信息</h3>
+            <ul>
+              <li><strong>API 地址:</strong> <code>{{ apiBase or 'http://localhost:8000' }}</code></li>
+              <li><strong>支持语言:</strong> Java, C++, Python, C, JavaScript</li>
+              <li><strong>检测引擎:</strong> JPlag 6.2.0</li>
+            </ul>
+            
+            <h3>🚀 快速开始</h3>
+            <div class="button-group">
+              <a href="/contest" class="rounded button">
+                <span class="icon icon-trophy"></span>
+                查看比赛列表
+              </a>
+              <a href="https://github.com/CAUCOJ/Phosphorus" class="rounded button" target="_blank">
+                <span class="icon icon-external-link"></span>
+                查看文档
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('test-api').addEventListener('click', async function() {
+    const button = this;
+    const resultDiv = document.getElementById('api-result');
+    
+    button.disabled = true;
+    button.textContent = '测试中...';
+    resultDiv.innerHTML = '';
+    
+    try {
+        const apiBase = '{{ apiBase or "http://localhost:8000" }}';
+        const response = await fetch(`${apiBase}/health`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            resultDiv.innerHTML = `
+                <div class="typo">
+                    <blockquote class="success">
+                        <p><strong>✅ 连接成功！</strong></p>
+                        <p>Phosphorus 后端服务正在正常运行。</p>
+                        <p>服务状态: ${data.status || 'OK'}</p>
+                    </blockquote>
+                </div>
+            `;
+        } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="typo">
+                <blockquote class="warn">
+                    <p><strong>❌ 连接失败</strong></p>
+                    <p>错误信息: ${error.message}</p>
+                    <p>请检查 Phosphorus 后端服务是否正在运行。</p>
+                </blockquote>
+            </div>
+        `;
+    } finally {
+        button.disabled = false;
+        button.textContent = '测试 API 连接';
+    }
+});
+</script>
+{% endblock %}

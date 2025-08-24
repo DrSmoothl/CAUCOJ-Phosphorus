@@ -1,0 +1,280 @@
+{% set page_name = "抄袭检测详情" %}
+{% extends "layout/basic.html" %}
+{% import "components/contest.html" as contest with context %}
+{% import "components/user.html" as user with context %}
+
+{% block content %}
+<div class="row">
+  <div class="medium-12 columns">
+    {% if error %}
+    <div class="section">
+      <div class="section__body">
+        <blockquote class="warn">
+          <p><strong>{{ _('Error') }}:</strong> {{ error }}</p>
+        </blockquote>
+        <a href="{{ url('plagiarism_main', tid=tdoc._id) }}" class="rounded button">
+          {{ _('Back to Main') }}
+        </a>
+      </div>
+    </div>
+    {% else %}
+    
+    <!-- 检测结果概览 -->
+    <div class="section">
+      <div class="section__header">
+        <h1 class="section__title">
+          {{ _('Plagiarism Detection Results') }} - {{ tdoc.title }}
+        </h1>
+      </div>
+      <div class="section__body">
+        <div class="row">
+          <div class="medium-3 columns">
+            <div class="stat">
+              <div class="stat__number">{{ result.total_submissions }}</div>
+              <div class="stat__label">{{ _('Total Submissions') }}</div>
+            </div>
+          </div>
+          <div class="medium-3 columns">
+            <div class="stat">
+              <div class="stat__number">{{ result.total_comparisons }}</div>
+              <div class="stat__label">{{ _('Comparisons Made') }}</div>
+            </div>
+          </div>
+          <div class="medium-3 columns">
+            <div class="stat">
+              <div class="stat__number">{{ result.high_similarity_pairs|length }}</div>
+              <div class="stat__label">{{ _('Suspicious Pairs') }}</div>
+            </div>
+          </div>
+          <div class="medium-3 columns">
+            <div class="stat">
+              <div class="stat__number">{{ result.execution_time_ms }}ms</div>
+              <div class="stat__label">{{ _('Analysis Time') }}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="typo">
+          <p><strong>{{ _('Analysis ID') }}:</strong> <code>{{ result.analysis_id }}</code></p>
+          <p><strong>{{ _('Detection Time') }}:</strong> {{ result.created_at[:19] }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 高相似度对 -->
+    {% if result.high_similarity_pairs %}
+    <div class="section">
+      <div class="section__header">
+        <h2 class="section__title">{{ _('High Similarity Pairs') }}</h2>
+      </div>
+      <div class="section__body no-padding">
+        <table class="data-table">
+          <colgroup>
+            <col class="col--user">
+            <col class="col--user">
+            <col class="col--similarity">
+            <col class="col--details">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="col--user">{{ _('User 1') }}</th>
+              <th class="col--user">{{ _('User 2') }}</th>
+              <th class="col--similarity">{{ _('Similarity') }}</th>
+              <th class="col--details">{{ _('Details') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pair in result.high_similarity_pairs %}
+            <tr>
+              <td class="col--user">
+                {{ user.render_inline(udict[pair.user1_id], badge=false) }}
+              </td>
+              <td class="col--user">
+                {{ user.render_inline(udict[pair.user2_id], badge=false) }}
+              </td>
+              <td class="col--similarity">
+                {% set similarity_percent = (pair.similarity * 100)|round(1) %}
+                {% if similarity_percent >= 80 %}
+                  <span class="bp5-tag bp5-large bp5-intent-danger">{{ similarity_percent }}%</span>
+                {% elif similarity_percent >= 50 %}
+                  <span class="bp5-tag bp5-large bp5-intent-warning">{{ similarity_percent }}%</span>
+                {% else %}
+                  <span class="bp5-tag bp5-large bp5-intent-primary">{{ similarity_percent }}%</span>
+                {% endif %}
+              </td>
+              <td class="col--details">
+                <div class="typo">
+                  <p><strong>{{ _('Matches') }}:</strong> {{ pair.match_count }}</p>
+                  <p><small>{{ _('Files') }}: {{ pair.file1|basename }} ↔ {{ pair.file2|basename }}</small></p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 聚类结果 -->
+    {% if result.clusters %}
+    <div class="section">
+      <div class="section__header">
+        <h2 class="section__title">{{ _('Detected Clusters') }}</h2>
+      </div>
+      <div class="section__body">
+        {% for cluster in result.clusters %}
+        <div class="cluster-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+          <h4>{{ _('Cluster') }} #{{ cluster.cluster_id }}</h4>
+          <div class="typo">
+            <p><strong>{{ _('Average Similarity') }}:</strong> {{ (cluster.avg_similarity * 100)|round(1) }}%</p>
+            <p><strong>{{ _('Members') }}:</strong>
+              {% for member_id in cluster.members %}
+                {{ user.render_inline(udict[member_id], badge=false) }}{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 提交统计 -->
+    {% if result.submission_stats %}
+    <div class="section">
+      <div class="section__header">
+        <h2 class="section__title">{{ _('Submission Statistics') }}</h2>
+      </div>
+      <div class="section__body no-padding">
+        <table class="data-table">
+          <colgroup>
+            <col class="col--user">
+            <col class="col--count">
+            <col class="col--avg">
+            <col class="col--max">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="col--user">{{ _('User') }}</th>
+              <th class="col--count">{{ _('Submissions') }}</th>
+              <th class="col--avg">{{ _('Avg Similarity') }}</th>
+              <th class="col--max">{{ _('Max Similarity') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for stat in result.submission_stats|sort(attribute='max_similarity', reverse=true) %}
+            <tr>
+              <td class="col--user">
+                {{ user.render_inline(udict[stat.user_id], badge=false) }}
+              </td>
+              <td class="col--count">{{ stat.submission_count }}</td>
+              <td class="col--avg">{{ (stat.avg_similarity * 100)|round(1) }}%</td>
+              <td class="col--max">
+                {% set max_sim = (stat.max_similarity * 100)|round(1) %}
+                {% if max_sim >= 80 %}
+                  <span class="bp5-tag bp5-intent-danger">{{ max_sim }}%</span>
+                {% elif max_sim >= 50 %}
+                  <span class="bp5-tag bp5-intent-warning">{{ max_sim }}%</span>
+                {% else %}
+                  <span class="bp5-tag bp5-intent-success">{{ max_sim }}%</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 失败的提交 -->
+    {% if result.failed_submissions %}
+    <div class="section">
+      <div class="section__header">
+        <h2 class="section__title">{{ _('Failed Submissions') }}</h2>
+      </div>
+      <div class="section__body no-padding">
+        <table class="data-table">
+          <colgroup>
+            <col class="col--user">
+            <col class="col--error">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="col--user">{{ _('User') }}</th>
+              <th class="col--error">{{ _('Error') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fail in result.failed_submissions %}
+            <tr>
+              <td class="col--user">
+                {{ user.render_inline(udict[fail.user_id], badge=false) }}
+              </td>
+              <td class="col--error">
+                <code class="text-error">{{ fail.error }}</code>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 操作按钮 -->
+    <div class="section">
+      <div class="section__body">
+        <a href="{{ url('plagiarism_main', tid=tdoc._id) }}" class="rounded button">
+          <span class="icon icon-arrow-left"></span>
+          {{ _('Back to Main') }}
+        </a>
+        <a href="{{ url('plagiarism_export', tid=tdoc._id, rid=result._id) }}" 
+           class="rounded primary button" download>
+          <span class="icon icon-download"></span>
+          {{ _('Export Results') }}
+        </a>
+        {% if result.jplag_file_path %}
+        <a href="{{ result.jplag_file_path }}" class="rounded button" target="_blank">
+          <span class="icon icon-external-link"></span>
+          {{ _('View JPlag Report') }}
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.stat {
+  text-align: center;
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.stat__number {
+  font-size: 2em;
+  font-weight: bold;
+  color: #333;
+}
+
+.stat__label {
+  font-size: 0.9em;
+  color: #666;
+  margin-top: 5px;
+}
+
+.cluster-item {
+  background: #f9f9f9;
+}
+
+.text-error {
+  color: #d32f2f;
+}
+</style>
+{% endblock %}

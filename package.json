@@ -1,0 +1,11 @@
+{
+  "name": "phosphorus-plagiarism",
+  "version": "1.0.0",
+  "description": "Phosphorus plagiarism detection integration for Hydro OJ",
+  "main": "index.ts",
+  "author": "CAUCOJ Team",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "hydrooj": "*"
+  }
+}

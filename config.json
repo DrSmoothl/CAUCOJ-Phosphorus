@@ -1,0 +1,24 @@
+{
+  "plugin": {
+    "name": "phosphorus-plagiarism",
+    "version": "1.0.0",
+    "description": "Phosphorus plagiarism detection integration for Hydro OJ",
+    "author": "CAUCOJ Team",
+    "license": "AGPL-3.0"
+  },
+  "api": {
+    "base_url": "http://localhost:8000",
+    "timeout": 300000,
+    "retry_attempts": 3
+  },
+  "detection": {
+    "default_min_tokens": 9,
+    "default_similarity_threshold": 0.0,
+    "max_concurrent_checks": 3
+  },
+  "ui": {
+    "show_in_sidebar": true,
+    "show_in_tabs": true,
+    "enable_real_time_updates": false
+  }
+}
