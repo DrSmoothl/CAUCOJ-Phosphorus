@@ -1,0 +1,244 @@
+{% extends "layout/basic.html" %}
+{% block title %}题目查重管理{% endblock %}
+
+{% block content %}
+<div class="section__header">
+    <h1 class="section__title">题目查重管理</h1>
+    <div class="section__actions">
+        <a href="/plagiarism" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> 返回主页
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">功能说明</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info" role="alert">
+                    <h5 class="alert-heading">
+                        <i class="fas fa-info-circle"></i> 题目查重功能
+                    </h5>
+                    <p>题目查重功能允许您对单个题目的所有提交进行相似度分析，包括跨比赛的提交记录。</p>
+                    <hr>
+                    <h6>主要特性：</h6>
+                    <ul>
+                        <li><strong>跨比赛分析：</strong>分析同一题目在不同比赛中的提交</li>
+                        <li><strong>历史提交对比：</strong>对比用户的历史提交记录</li>
+                        <li><strong>用户行为分析：</strong>识别用户的编程模式和潜在抄袭行为</li>
+                        <li><strong>趋势统计：</strong>查看题目的整体相似度趋势</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">开发状态</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning" role="alert">
+                    <h5 class="alert-heading">
+                        <i class="fas fa-exclamation-triangle"></i> 功能开发中
+                    </h5>
+                    <p>题目查重功能目前正在开发中，预计将在下个版本中提供。</p>
+                    <hr>
+                    <h6>计划功能：</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>基础功能：</h6>
+                            <ul>
+                                <li>题目搜索和选择</li>
+                                <li>提交历史查看</li>
+                                <li>相似度检测配置</li>
+                                <li>检测结果展示</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>高级功能：</h6>
+                            <ul>
+                                <li>时间范围筛选</li>
+                                <li>编程语言过滤</li>
+                                <li>用户群体分析</li>
+                                <li>批量题目检测</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">替代方案</h3>
+            </div>
+            <div class="card-body">
+                <p>在题目查重功能开发完成之前，您可以使用以下替代方案：</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-trophy"></i> 比赛查重
+                                </h5>
+                                <p class="card-text">使用比赛查重功能来检测特定比赛中的代码相似度。</p>
+                                <a href="/plagiarism/contest" class="btn btn-primary">
+                                    前往比赛查重
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-code"></i> API 接口
+                                </h5>
+                                <p class="card-text">直接调用 Phosphorus API 进行自定义的相似度检测。</p>
+                                <button class="btn btn-outline-primary" onclick="showApiInfo()">
+                                    查看 API 文档
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API 信息模态框 -->
+<div class="modal fade" id="apiModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Phosphorus API 接口</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <h6>API 基地址</h6>
+                <pre><code>{{ apiBase }}</code></pre>
+                
+                <h6>主要接口</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>方法</th>
+                                <th>路径</th>
+                                <th>描述</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge badge-success">POST</span></td>
+                                <td>/api/v1/contest/plagiarism</td>
+                                <td>比赛查重检测</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-primary">GET</span></td>
+                                <td>/api/v1/contest/{id}/plagiarism</td>
+                                <td>获取比赛查重结果</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-info">GET</span></td>
+                                <td>/api/v1/health</td>
+                                <td>服务健康检查</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h6>示例请求</h6>
+                <pre><code>curl -X POST "{{ apiBase }}/api/v1/contest/plagiarism" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "contest_id": "your_contest_id",
+       "min_tokens": 9,
+       "similarity_threshold": 0.0
+     }'</code></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showApiInfo() {
+    $('#apiModal').modal('show');
+}
+</script>
+
+<style>
+.section__actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.alert {
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+    color: #0c5460;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+}
+
+.alert-heading {
+    color: inherit;
+    margin-bottom: 0.5rem;
+}
+
+.card.bg-light {
+    background-color: #f8f9fa !important;
+}
+
+.badge {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+}
+
+.badge-success { background-color: #28a745; color: white; }
+.badge-primary { background-color: #007bff; color: white; }
+.badge-info { background-color: #17a2b8; color: white; }
+
+pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid #e9ecef;
+}
+
+.modal-content {
+    border-radius: 8px;
+}
+</style>
+{% endblock %}

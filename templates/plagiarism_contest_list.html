@@ -1,0 +1,253 @@
+{% extends "layout/basic.html" %}
+{% block title %}比赛查重管理{% endblock %}
+
+{% block content %}
+<div class="section__header">
+    <h1 class="section__title">比赛查重管理</h1>
+    <div class="section__actions">
+        <a href="/plagiarism" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> 返回主页
+        </a>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    <strong>错误:</strong> {{ error }}
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">比赛列表</h3>
+                <div class="card-actions">
+                    <button class="btn btn-sm btn-primary" onclick="refreshPage()">
+                        <i class="fas fa-sync-alt"></i> 刷新
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if contests %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>比赛名称</th>
+                                <th>开始时间</th>
+                                <th>结束时间</th>
+                                <th>参与人数</th>
+                                <th>题目数</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for contest in contests %}
+                            <tr>
+                                <td>
+                                    <strong>{{ contest.title }}</strong>
+                                    <br>
+                                    <small class="text-muted">ID: {{ contest._id }}</small>
+                                </td>
+                                <td>{{ contest.beginAt.strftime('%Y-%m-%d %H:%M') if contest.beginAt else '-' }}</td>
+                                <td>{{ contest.endAt.strftime('%Y-%m-%d %H:%M') if contest.endAt else '-' }}</td>
+                                <td>{{ contest.attend or 0 }}</td>
+                                <td>{{ contest.pids|length if contest.pids else 0 }}</td>
+                                <td>
+                                    {% set now = moment() %}
+                                    {% if contest.beginAt and contest.endAt %}
+                                        {% if now < contest.beginAt %}
+                                            <span class="badge badge-info">未开始</span>
+                                        {% elif now > contest.endAt %}
+                                            <span class="badge badge-secondary">已结束</span>
+                                        {% else %}
+                                            <span class="badge badge-success">进行中</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge badge-warning">未知</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group">
+                                        <a href="/plagiarism/contest/{{ contest._id }}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i> 查看
+                                        </a>
+                                        <button 
+                                            class="btn btn-sm btn-warning" 
+                                            onclick="checkContestPlagiarism('{{ contest._id }}', '{{ contest.title }}')"
+                                            id="check-btn-{{ contest._id }}">
+                                            <i class="fas fa-search"></i> 检测
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-trophy fa-3x text-muted"></i>
+                    <h4 class="mt-3">暂无比赛</h4>
+                    <p class="text-muted">系统中还没有任何比赛，请先创建比赛。</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 检测配置模态框 -->
+<div class="modal fade" id="checkModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">配置查重参数</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="checkForm">
+                    <input type="hidden" id="contestId" name="contestId">
+                    <div class="form-group">
+                        <label>比赛名称:</label>
+                        <p id="contestTitle" class="font-weight-bold"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="minTokens">最小Token数:</label>
+                        <input type="number" class="form-control" id="minTokens" name="minTokens" value="9" min="1" max="100">
+                        <small class="form-text text-muted">代码块的最小token数量，较小的值会检测更细微的相似性</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="similarityThreshold">相似度阈值:</label>
+                        <input type="number" class="form-control" id="similarityThreshold" name="similarityThreshold" 
+                               value="0.0" min="0" max="1" step="0.1">
+                        <small class="form-text text-muted">只显示相似度高于此阈值的结果 (0.0-1.0)</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitCheck()">开始检测</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function refreshPage() {
+    window.location.reload();
+}
+
+function checkContestPlagiarism(contestId, contestTitle) {
+    document.getElementById('contestId').value = contestId;
+    document.getElementById('contestTitle').textContent = contestTitle;
+    $('#checkModal').modal('show');
+}
+
+async function submitCheck() {
+    const contestId = document.getElementById('contestId').value;
+    const minTokens = parseInt(document.getElementById('minTokens').value);
+    const similarityThreshold = parseFloat(document.getElementById('similarityThreshold').value);
+    
+    const checkBtn = document.getElementById(`check-btn-${contestId}`);
+    const originalText = checkBtn.innerHTML;
+    
+    try {
+        // 显示加载状态
+        checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检测中...';
+        checkBtn.disabled = true;
+        
+        $('#checkModal').modal('hide');
+        
+        const response = await fetch('/plagiarism/contest/check', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contestId: contestId,
+                minTokens: minTokens,
+                similarityThreshold: similarityThreshold
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('查重检测完成！正在跳转到结果页面...');
+            window.location.href = `/plagiarism/contest/${contestId}`;
+        } else {
+            alert(`检测失败: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`检测过程中出现错误: ${error.message}`);
+    } finally {
+        // 恢复按钮状态
+        checkBtn.innerHTML = originalText;
+        checkBtn.disabled = false;
+    }
+}
+</script>
+
+<style>
+.section__actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.badge {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+}
+
+.badge-info { background-color: #17a2b8; color: white; }
+.badge-success { background-color: #28a745; color: white; }
+.badge-secondary { background-color: #6c757d; color: white; }
+.badge-warning { background-color: #ffc107; color: black; }
+
+.btn-group .btn {
+    margin-right: 0.25rem;
+}
+
+.modal-content {
+    border-radius: 8px;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-control {
+    padding: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.alert {
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+</style>
+{% endblock %}

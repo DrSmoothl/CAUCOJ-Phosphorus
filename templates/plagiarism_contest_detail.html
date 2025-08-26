@@ -1,0 +1,341 @@
+{% extends "layout/basic.html" %}
+{% block title %}{{ contest.title }} - 查重结果{% endblock %}
+
+{% block content %}
+<div class="section__header">
+    <h1 class="section__title">{{ contest.title }} - 查重结果</h1>
+    <div class="section__actions">
+        <a href="/plagiarism/contest" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> 返回列表
+        </a>
+        <button class="btn btn-warning" onclick="triggerNewCheck()">
+            <i class="fas fa-search"></i> 重新检测
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+    <strong>获取结果失败:</strong> {{ error }}
+</div>
+{% endif %}
+
+<!-- 比赛信息 -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">比赛信息</h3>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-2">比赛ID:</dt>
+                    <dd class="col-sm-4"><code>{{ contest._id }}</code></dd>
+                    
+                    <dt class="col-sm-2">开始时间:</dt>
+                    <dd class="col-sm-4">{{ contest.beginAt.strftime('%Y-%m-%d %H:%M') if contest.beginAt else '-' }}</dd>
+                    
+                    <dt class="col-sm-2">结束时间:</dt>
+                    <dd class="col-sm-4">{{ contest.endAt.strftime('%Y-%m-%d %H:%M') if contest.endAt else '-' }}</dd>
+                    
+                    <dt class="col-sm-2">参与人数:</dt>
+                    <dd class="col-sm-4">{{ contest.attend or 0 }}</dd>
+                    
+                    <dt class="col-sm-2">题目数量:</dt>
+                    <dd class="col-sm-4">{{ contest.pids|length if contest.pids else 0 }}</dd>
+                    
+                    <dt class="col-sm-2">比赛规则:</dt>
+                    <dd class="col-sm-4">{{ contest.rule or 'acm' }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if results %}
+<!-- 检测结果列表 -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">查重历史 ({{ results|length }} 次)</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>检测时间</th>
+                                <th>提交总数</th>
+                                <th>比较总数</th>
+                                <th>高相似度对</th>
+                                <th>聚类数</th>
+                                <th>执行耗时</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in results %}
+                            <tr>
+                                <td>
+                                    {{ result.created_at[:19] if result.created_at else '-' }}
+                                    <br>
+                                    <small class="text-muted">{{ result._id[:8] }}...</small>
+                                </td>
+                                <td><span class="badge badge-info">{{ result.total_submissions }}</span></td>
+                                <td><span class="badge badge-secondary">{{ result.total_comparisons }}</span></td>
+                                <td>
+                                    {% if result.high_similarity_pairs %}
+                                        <span class="badge badge-warning">{{ result.high_similarity_pairs|length }}</span>
+                                    {% else %}
+                                        <span class="badge badge-success">0</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if result.clusters %}
+                                        <span class="badge badge-info">{{ result.clusters|length }}</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">0</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ (result.execution_time_ms / 1000)|round(2) }}s</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-primary" onclick="showResultDetail('{{ result._id }}')">
+                                            <i class="fas fa-eye"></i> 详情
+                                        </button>
+                                        <a href="/plagiarism/contest/{{ contest._id }}/{{ result._id }}/export" 
+                                           class="btn btn-sm btn-success">
+                                            <i class="fas fa-download"></i> 导出
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最新结果详情 -->
+{% if results %}
+{% set latest_result = results[0] %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">最新检测详情</h3>
+                <div class="card-actions">
+                    <small class="text-muted">{{ latest_result.created_at[:19] if latest_result.created_at else '-' }}</small>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if latest_result.high_similarity_pairs %}
+                <h5>高相似度提交对 ({{ latest_result.high_similarity_pairs|length }})</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>用户1</th>
+                                <th>用户2</th>
+                                <th>相似度</th>
+                                <th>匹配数</th>
+                                <th>文件</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pair in latest_result.high_similarity_pairs[:10] %}
+                            <tr>
+                                <td>
+                                    {% if udict and pair.user1_id in udict %}
+                                        {{ udict[pair.user1_id].uname }}
+                                    {% else %}
+                                        ID: {{ pair.user1_id }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if udict and pair.user2_id in udict %}
+                                        {{ udict[pair.user2_id].uname }}
+                                    {% else %}
+                                        ID: {{ pair.user2_id }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge {% if pair.similarity > 0.8 %}badge-danger{% elif pair.similarity > 0.5 %}badge-warning{% else %}badge-info{% endif %}">
+                                        {{ (pair.similarity * 100)|round(1) }}%
+                                    </span>
+                                </td>
+                                <td>{{ pair.match_count }}</td>
+                                <td>
+                                    <small>{{ pair.file1.split('/')[-1] if pair.file1 else '-' }}</small>
+                                    <br>
+                                    <small>{{ pair.file2.split('/')[-1] if pair.file2 else '-' }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if latest_result.high_similarity_pairs|length > 10 %}
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="showAllPairs('{{ latest_result._id }}')">
+                                        显示全部 {{ latest_result.high_similarity_pairs|length }} 个相似对
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if latest_result.submission_stats %}
+                <h5 class="mt-4">用户提交统计 (前10名)</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>提交数</th>
+                                <th>平均相似度</th>
+                                <th>最高相似度</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in latest_result.submission_stats[:10] %}
+                            <tr>
+                                <td>
+                                    {% if udict and stat.user_id in udict %}
+                                        {{ udict[stat.user_id].uname }}
+                                    {% else %}
+                                        ID: {{ stat.user_id }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ stat.submission_count }}</td>
+                                <td>{{ (stat.avg_similarity * 100)|round(1) }}%</td>
+                                <td>
+                                    <span class="badge {% if stat.max_similarity > 0.8 %}badge-danger{% elif stat.max_similarity > 0.5 %}badge-warning{% else %}badge-success{% endif %}">
+                                        {{ (stat.max_similarity * 100)|round(1) }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if latest_result.failed_submissions %}
+                <h5 class="mt-4">失败的提交</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>错误信息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fail in latest_result.failed_submissions %}
+                            <tr>
+                                <td>
+                                    {% if udict and fail.user_id in udict %}
+                                        {{ udict[fail.user_id].uname }}
+                                    {% else %}
+                                        ID: {{ fail.user_id }}
+                                    {% endif %}
+                                </td>
+                                <td><small class="text-danger">{{ fail.error }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<!-- 无结果状态 -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="text-center py-5">
+            <i class="fas fa-search fa-3x text-muted"></i>
+            <h4 class="mt-3">尚未进行查重检测</h4>
+            <p class="text-muted">点击"重新检测"按钮开始检测此比赛的代码相似度。</p>
+            <button class="btn btn-primary btn-lg" onclick="triggerNewCheck()">
+                <i class="fas fa-search"></i> 开始检测
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function triggerNewCheck() {
+    if (confirm('确定要重新检测此比赛的代码相似度吗？这可能需要一些时间。')) {
+        window.location.href = '/plagiarism/contest';
+    }
+}
+
+function showResultDetail(resultId) {
+    alert(`查看详情功能正在开发中。结果ID: ${resultId}`);
+    // TODO: 实现详情页面跳转
+}
+
+function showAllPairs(resultId) {
+    alert(`显示全部相似对功能正在开发中。结果ID: ${resultId}`);
+    // TODO: 实现完整列表展示
+}
+</script>
+
+<style>
+.section__actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.badge {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+}
+
+.badge-info { background-color: #17a2b8; color: white; }
+.badge-success { background-color: #28a745; color: white; }
+.badge-secondary { background-color: #6c757d; color: white; }
+.badge-warning { background-color: #ffc107; color: black; }
+.badge-danger { background-color: #dc3545; color: white; }
+
+.btn-group .btn {
+    margin-right: 0.25rem;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.alert {
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+</style>
+{% endblock %}

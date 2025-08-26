@@ -9,6 +9,20 @@ import {
 // Phosphorus API base URL
 const PHOSPHORUS_API_BASE = 'http://localhost:8000';
 
+interface Contest {
+    _id: ObjectId;
+    title: string;
+    owner: number;
+    domainId: string;
+    docType: number;
+    docId: ObjectId;
+    beginAt: Date;
+    endAt: Date;
+    attend: number;
+    pids: any[];
+    rule: string;
+}
+
 interface PlagiarismResult {
     _id: string;
     contest_id: string;
@@ -42,6 +56,17 @@ interface PlagiarismResult {
     }>;
     created_at: string;
     jplag_file_path?: string;
+}
+
+/**
+ * 获取所有比赛
+ */
+async function getAllContests(domainId: string): Promise<Contest[]> {
+    // 查询 documents 集合中 docType = 30 的文档（比赛）
+    return await global.Hydro.model.document.getMulti(
+        domainId, 
+        30 as any
+    ).sort({ beginAt: -1 }).toArray();
 }
 
 /**
@@ -111,7 +136,11 @@ async function getContestPlagiarismResults(contestId: string): Promise<Plagiaris
     }
 }
 
-const plagiarismModel = { checkContestPlagiarism, getContestPlagiarismResults };
+const plagiarismModel = { 
+    getAllContests,
+    checkContestPlagiarism, 
+    getContestPlagiarismResults 
+};
 
 declare module 'hydrooj' {
     interface Model {
@@ -122,65 +151,64 @@ declare module 'hydrooj' {
 global.Hydro.model.plagiarism = plagiarismModel;
 
 /**
- * 抄袭检测主页面 Handler
+ * 查重系统主页面 Handler - /plagiarism
  */
-class PlagiarismMainHandler extends Handler {
-    async get({ domainId, tid }: { domainId: string; tid: ObjectId }) {
-        // 检查权限：需要是比赛管理员
-        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
-        if (!tdoc) {
-            throw new NotFoundError(tid.toString());
-        }
-        
-        // 检查是否有管理权限
-        if (this.user._id !== tdoc.owner) {
-            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-        }
+class PlagiarismSystemHandler extends Handler {
+    async get({ domainId }: { domainId: string }) {
+        // 检查权限：需要管理员权限
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
 
-        // 获取历史检测结果
-        let results: PlagiarismResult[] = [];
+        this.response.body = { 
+            apiBase: PHOSPHORUS_API_BASE
+        };
+        this.response.template = 'plagiarism_system.html';
+    }
+}
+
+/**
+ * 比赛查重列表页面 Handler - /plagiarism/contest
+ */
+class PlagiarismContestListHandler extends Handler {
+    async get({ domainId }: { domainId: string }) {
+        // 检查权限：需要管理员权限
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
+
+        // 获取所有比赛
+        let contests: Contest[] = [];
         let error: string | null = null;
         
         try {
-            results = await plagiarismModel.getContestPlagiarismResults(tid.toString());
+            contests = await plagiarismModel.getAllContests(domainId);
         } catch (err: any) {
             error = err.message;
         }
 
         this.response.body = { 
-            tdoc, 
-            results, 
+            contests,
             error,
             apiBase: PHOSPHORUS_API_BASE
         };
-        this.response.template = 'plagiarism_main.html';
+        this.response.template = 'plagiarism_contest_list.html';
     }
 }
 
 /**
- * 执行抄袭检测 Handler
+ * 比赛查重检测 Handler - /plagiarism/contest/check
  */
-class PlagiarismCheckHandler extends Handler {
-    async post({ domainId, tid, minTokens = 9, similarityThreshold = 0.0 }: { 
+class PlagiarismContestCheckHandler extends Handler {
+    async post({ domainId, contestId, minTokens = 9, similarityThreshold = 0.0 }: { 
         domainId: string; 
-        tid: ObjectId; 
+        contestId: string; 
         minTokens?: number; 
         similarityThreshold?: number;
     }) {
         // 检查权限
-        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
-        if (!tdoc) {
-            throw new NotFoundError(tid.toString());
-        }
-        
-        if (this.user._id !== tdoc.owner) {
-            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-        }
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
 
         try {
             // 调用 Phosphorus API 进行检测
             const result = await plagiarismModel.checkContestPlagiarism(
-                tid.toString(), 
+                contestId, 
                 minTokens, 
                 similarityThreshold
             );
@@ -188,7 +216,7 @@ class PlagiarismCheckHandler extends Handler {
             this.response.body = { 
                 success: true, 
                 result,
-                message: 'Plagiarism check completed successfully'
+                message: 'Contest plagiarism check completed successfully'
             };
         } catch (error: any) {
             this.response.body = { 
@@ -202,38 +230,32 @@ class PlagiarismCheckHandler extends Handler {
 }
 
 /**
- * 查看检测结果详情 Handler
+ * 比赛查重详情页面 Handler - /plagiarism/contest/:id
  */
-class PlagiarismDetailHandler extends Handler {
-    async get({ domainId, tid, rid }: { domainId: string; tid: ObjectId; rid: string }) {
+class PlagiarismContestDetailHandler extends Handler {
+    async get({ domainId, id }: { domainId: string; id: string }) {
         // 检查权限
-        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
-        if (!tdoc) {
-            throw new NotFoundError(tid.toString());
-        }
-        
-        if (this.user._id !== tdoc.owner) {
-            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
+
+        // 获取比赛信息
+        const contest = await global.Hydro.model.contest.get(domainId, new ObjectId(id));
+        if (!contest) {
+            throw new NotFoundError(`Contest ${id}`);
         }
 
         // 获取检测结果
-        let result: PlagiarismResult | null = null;
+        let results: PlagiarismResult[] = [];
         let error: string | null = null;
         
         try {
-            const results = await plagiarismModel.getContestPlagiarismResults(tid.toString());
-            result = results.find(r => r._id === rid) || null;
-            
-            if (!result) {
-                throw new NotFoundError(`Plagiarism result ${rid}`);
-            }
+            results = await plagiarismModel.getContestPlagiarismResults(id);
         } catch (err: any) {
             error = err.message;
         }
 
         // 获取用户信息
         const uids = new Set<number>();
-        if (result) {
+        results.forEach(result => {
             result.high_similarity_pairs.forEach(pair => {
                 uids.add(pair.user1_id);
                 uids.add(pair.user2_id);
@@ -244,17 +266,51 @@ class PlagiarismDetailHandler extends Handler {
             result.failed_submissions.forEach(fail => {
                 uids.add(fail.user_id);
             });
-        }
+        });
 
         const udict = await UserModel.getList(domainId, Array.from(uids));
 
         this.response.body = { 
-            tdoc, 
-            result, 
+            contest,
+            results, 
             error,
-            udict
+            udict,
+            apiBase: PHOSPHORUS_API_BASE
         };
-        this.response.template = 'plagiarism_detail.html';
+        this.response.template = 'plagiarism_contest_detail.html';
+    }
+}
+
+/**
+ * 题目查重列表页面 Handler - /plagiarism/problem
+ */
+class PlagiarismProblemListHandler extends Handler {
+    async get({ domainId }: { domainId: string }) {
+        // 检查权限：需要管理员权限
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
+
+        this.response.body = { 
+            message: 'Problem plagiarism detection is not implemented yet.',
+            apiBase: PHOSPHORUS_API_BASE
+        };
+        this.response.template = 'plagiarism_problem_list.html';
+    }
+}
+
+/**
+ * 题目查重详情页面 Handler - /plagiarism/problem/:id
+ */
+class PlagiarismProblemDetailHandler extends Handler {
+    async get({ domainId, id }: { domainId: string; id: string }) {
+        // 检查权限
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
+
+        this.response.body = { 
+            problemId: id,
+            message: 'Problem plagiarism detection is not implemented yet.',
+            apiBase: PHOSPHORUS_API_BASE
+        };
+        this.response.template = 'plagiarism_problem_detail.html';
     }
 }
 
@@ -262,36 +318,36 @@ class PlagiarismDetailHandler extends Handler {
  * 导出检测结果 Handler
  */
 class PlagiarismExportHandler extends Handler {
-    async get({ domainId, tid, rid }: { domainId: string; tid: ObjectId; rid: string }) {
+    async get({ domainId, type, id, rid }: { domainId: string; type: string; id: string; rid: string }) {
         // 检查权限
-        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
-        if (!tdoc) {
-            throw new NotFoundError(tid.toString());
-        }
-        
-        if (this.user._id !== tdoc.owner) {
-            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-        }
+        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
 
-        // 获取检测结果
-        const results = await plagiarismModel.getContestPlagiarismResults(tid.toString());
-        const result = results.find(r => r._id === rid);
-        
-        if (!result) {
-            throw new NotFoundError(`Plagiarism result ${rid}`);
-        }
+        if (type === 'contest') {
+            // 获取比赛检测结果
+            const results = await plagiarismModel.getContestPlagiarismResults(id);
+            const result = results.find(r => r._id === rid);
+            
+            if (!result) {
+                throw new NotFoundError(`Plagiarism result ${rid}`);
+            }
 
-        // 设置下载响应
-        this.response.body = JSON.stringify(result, null, 2);
-        this.response.type = 'application/json';
-        this.response.addHeader('Content-Disposition', `attachment; filename="plagiarism_${tid}_${rid}.json"`);
+            // 设置下载响应
+            this.response.body = JSON.stringify(result, null, 2);
+            this.response.type = 'application/json';
+            this.response.addHeader('Content-Disposition', `attachment; filename="contest_plagiarism_${id}_${rid}.json"`);
+        } else {
+            throw new NotFoundError(`Export type ${type} not supported`);
+        }
     }
 }
 
 export async function apply(ctx: Context) {
     // 注册路由
-    ctx.Route('plagiarism_main', '/contest/:tid/plagiarism', PlagiarismMainHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_check', '/contest/:tid/plagiarism/check', PlagiarismCheckHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_detail', '/contest/:tid/plagiarism/:rid', PlagiarismDetailHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_export', '/contest/:tid/plagiarism/:rid/export', PlagiarismExportHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_system', '/plagiarism', PlagiarismSystemHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_contest_list', '/plagiarism/contest', PlagiarismContestListHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_contest_check', '/plagiarism/contest/check', PlagiarismContestCheckHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_contest_detail', '/plagiarism/contest/:id', PlagiarismContestDetailHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_problem_list', '/plagiarism/problem', PlagiarismProblemListHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_problem_detail', '/plagiarism/problem/:id', PlagiarismProblemDetailHandler, PRIV.PRIV_USER_PROFILE);
+    ctx.Route('plagiarism_export', '/plagiarism/:type/:id/:rid/export', PlagiarismExportHandler, PRIV.PRIV_USER_PROFILE);
 }

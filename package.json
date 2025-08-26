@@ -1,11 +1,52 @@
 {
   "name": "phosphorus-plagiarism",
-  "version": "1.0.0",
-  "description": "Phosphorus plagiarism detection integration for Hydro OJ",
+  "version": "2.0.0",
+  "description": "Phosphorus plagiarism detection plugin for Hydro OJ - Complete restructured version",
   "main": "index.ts",
   "author": "CAUCOJ Team",
   "license": "AGPL-3.0",
+  "keywords": [
+    "hydro",
+    "plagiarism",
+    "detection",
+    "jplag",
+    "phosphorus",
+    "code-similarity",
+    "contest-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CAUCOJ/Phosphorus"
+  },
   "dependencies": {
     "hydrooj": "5.0.0-beta.8"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^4.8.0"
+  },
+  "hydro": {
+    "addon": true,
+    "name": "phosphorus-plagiarism",
+    "version": "2.0.0",
+    "description": "Advanced plagiarism detection system powered by JPlag engine",
+    "routes": [
+      "/plagiarism",
+      "/plagiarism/contest",
+      "/plagiarism/contest/check",
+      "/plagiarism/contest/:id",
+      "/plagiarism/problem",
+      "/plagiarism/problem/:id",
+      "/plagiarism/:type/:id/:rid/export"
+    ],
+    "features": [
+      "Contest-wide plagiarism detection",
+      "Problem-specific analysis", 
+      "Historical results tracking",
+      "Detailed similarity reports",
+      "User behavior analytics",
+      "Export functionality",
+      "Real-time processing"
+    ]
   }
 }
