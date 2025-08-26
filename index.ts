@@ -16,8 +16,8 @@ interface Contest {
     domainId: string;
     docType: number;
     docId: ObjectId;
-    beginAt: Date;
-    endAt: Date;
+    beginAt: Date | null;
+    endAt: Date | null;
     attend: number;
     pids: any[];
     rule: string;
@@ -63,10 +63,19 @@ interface PlagiarismResult {
  */
 async function getAllContests(domainId: string): Promise<Contest[]> {
     // 查询 documents 集合中 docType = 30 的文档（比赛）
-    return await global.Hydro.model.document.getMulti(
+    const contests = await global.Hydro.model.document.getMulti(
         domainId, 
         30 as any
     ).sort({ beginAt: -1 }).toArray();
+    
+    // 确保日期字段被正确处理
+    return contests.map((contest: any) => ({
+        ...contest,
+        beginAt: contest.beginAt ? new Date(contest.beginAt) : null,
+        endAt: contest.endAt ? new Date(contest.endAt) : null,
+        attend: contest.attend || 0,
+        pids: contest.pids || []
+    }));
 }
 
 /**
@@ -179,8 +188,16 @@ class PlagiarismContestListHandler extends Handler {
         
         try {
             contests = await plagiarismModel.getAllContests(domainId);
+            // 添加调试信息
+            console.log('Contests loaded:', contests.length);
+            if (contests.length > 0) {
+                console.log('First contest:', contests[0]);
+                console.log('beginAt type:', typeof contests[0].beginAt);
+                console.log('endAt type:', typeof contests[0].endAt);
+            }
         } catch (err: any) {
             error = err.message;
+            console.error('Error loading contests:', err);
         }
 
         this.response.body = { 

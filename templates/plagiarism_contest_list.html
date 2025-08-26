@@ -51,22 +51,15 @@
                                     <br>
                                     <small class="text-muted">ID: {{ contest._id }}</small>
                                 </td>
-                                <td>{{ contest.beginAt.strftime('%Y-%m-%d %H:%M') if contest.beginAt else '-' }}</td>
-                                <td>{{ contest.endAt.strftime('%Y-%m-%d %H:%M') if contest.endAt else '-' }}</td>
+                                <td>{{ contest.beginAt if contest.beginAt else '-' }}</td>
+                                <td>{{ contest.endAt if contest.endAt else '-' }}</td>
                                 <td>{{ contest.attend or 0 }}</td>
                                 <td>{{ contest.pids|length if contest.pids else 0 }}</td>
                                 <td>
-                                    {% set now = moment() %}
                                     {% if contest.beginAt and contest.endAt %}
-                                        {% if now < contest.beginAt %}
-                                            <span class="badge badge-info">未开始</span>
-                                        {% elif now > contest.endAt %}
-                                            <span class="badge badge-secondary">已结束</span>
-                                        {% else %}
-                                            <span class="badge badge-success">进行中</span>
-                                        {% endif %}
+                                        <span class="badge badge-success">已配置</span>
                                     {% else %}
-                                        <span class="badge badge-warning">未知</span>
+                                        <span class="badge badge-warning">未配置</span>
                                     {% endif %}
                                 </td>
                                 <td>

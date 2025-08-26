@@ -33,10 +33,10 @@
                     <dd class="col-sm-4"><code>{{ contest._id }}</code></dd>
                     
                     <dt class="col-sm-2">开始时间:</dt>
-                    <dd class="col-sm-4">{{ contest.beginAt.strftime('%Y-%m-%d %H:%M') if contest.beginAt else '-' }}</dd>
+                    <dd class="col-sm-4">{{ contest.beginAt if contest.beginAt else '-' }}</dd>
                     
                     <dt class="col-sm-2">结束时间:</dt>
-                    <dd class="col-sm-4">{{ contest.endAt.strftime('%Y-%m-%d %H:%M') if contest.endAt else '-' }}</dd>
+                    <dd class="col-sm-4">{{ contest.endAt if contest.endAt else '-' }}</dd>
                     
                     <dt class="col-sm-2">参与人数:</dt>
                     <dd class="col-sm-4">{{ contest.attend or 0 }}</dd>
