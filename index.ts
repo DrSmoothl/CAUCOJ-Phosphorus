@@ -188,16 +188,8 @@ class PlagiarismContestListHandler extends Handler {
         
         try {
             contests = await plagiarismModel.getAllContests(domainId);
-            // 添加调试信息
-            console.log('Contests loaded:', contests.length);
-            if (contests.length > 0) {
-                console.log('First contest:', contests[0]);
-                console.log('beginAt type:', typeof contests[0].beginAt);
-                console.log('endAt type:', typeof contests[0].endAt);
-            }
         } catch (err: any) {
             error = err.message;
-            console.error('Error loading contests:', err);
         }
 
         this.response.body = { 

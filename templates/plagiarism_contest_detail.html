@@ -78,9 +78,9 @@
                             {% for result in results %}
                             <tr>
                                 <td>
-                                    {{ result.created_at[:19] if result.created_at else '-' }}
+                                    {{ result.created_at|truncate(19, true, '') if result.created_at else '-' }}
                                     <br>
-                                    <small class="text-muted">{{ result._id[:8] }}...</small>
+                                    <small class="text-muted">{{ result._id|truncate(8, true, '') }}...</small>
                                 </td>
                                 <td><span class="badge badge-info">{{ result.total_submissions }}</span></td>
                                 <td><span class="badge badge-secondary">{{ result.total_comparisons }}</span></td>
@@ -129,7 +129,7 @@
             <div class="card-header">
                 <h3 class="card-title">最新检测详情</h3>
                 <div class="card-actions">
-                    <small class="text-muted">{{ latest_result.created_at[:19] if latest_result.created_at else '-' }}</small>
+                    <small class="text-muted">{{ latest_result.created_at|truncate(19, true, '') if latest_result.created_at else '-' }}</small>
                 </div>
             </div>
             <div class="card-body">
@@ -147,7 +147,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for pair in latest_result.high_similarity_pairs[:10] %}
+                            {% for pair in latest_result.high_similarity_pairs %}
+                            {% if loop.index <= 10 %}
                             <tr>
                                 <td>
                                     {% if udict and pair.user1_id in udict %}
@@ -170,11 +171,12 @@
                                 </td>
                                 <td>{{ pair.match_count }}</td>
                                 <td>
-                                    <small>{{ pair.file1.split('/')[-1] if pair.file1 else '-' }}</small>
+                                    <small>{{ pair.file1|default('-') }}</small>
                                     <br>
-                                    <small>{{ pair.file2.split('/')[-1] if pair.file2 else '-' }}</small>
+                                    <small>{{ pair.file2|default('-') }}</small>
                                 </td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                             {% if latest_result.high_similarity_pairs|length > 10 %}
                             <tr>
@@ -203,7 +205,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for stat in latest_result.submission_stats[:10] %}
+                            {% for stat in latest_result.submission_stats %}
+                            {% if loop.index <= 10 %}
                             <tr>
                                 <td>
                                     {% if udict and stat.user_id in udict %}
@@ -220,6 +223,7 @@
                                     </span>
                                 </td>
                             </tr>
+                            {% endif %}
                             {% endfor %}
                         </tbody>
                     </table>
