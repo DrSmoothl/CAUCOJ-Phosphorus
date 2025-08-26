@@ -6,6 +6,6 @@
   "author": "CAUCOJ Team",
   "license": "AGPL-3.0",
   "dependencies": {
-    "hydrooj": "*"
+    "hydrooj": "5.0.0-beta.8"
   }
 }

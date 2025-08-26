@@ -3,10 +3,10 @@
 // @filename: index.ts
 import {
     Handler, NotFoundError, PermissionError,
-    param, PRIV, Types, UserModel, ObjectId, Context
+    PRIV, Types, UserModel, ObjectId, Context
 } from 'hydrooj';
 
-// Phosphorus API base URL - 可以通过配置文件设置
+// Phosphorus API base URL
 const PHOSPHORUS_API_BASE = 'http://localhost:8000';
 
 interface PlagiarismResult {
@@ -44,12 +44,6 @@ interface PlagiarismResult {
     jplag_file_path?: string;
 }
 
-interface ContestPlagiarismRequest {
-    contest_id: string;
-    min_tokens?: number;
-    similarity_threshold?: number;
-}
-
 /**
  * 调用 Phosphorus API 检查比赛抄袭
  */
@@ -58,14 +52,13 @@ async function checkContestPlagiarism(
     minTokens: number = 9, 
     similarityThreshold: number = 0.0
 ): Promise<PlagiarismResult> {
-    const requestData: ContestPlagiarismRequest = {
+    const requestData = {
         contest_id: contestId,
         min_tokens: minTokens,
         similarity_threshold: similarityThreshold
     };
 
     try {
-        // 使用 fetch API 调用 Phosphorus 后端
         const response = await fetch(
             `${PHOSPHORUS_API_BASE}/api/v1/contest/plagiarism`,
             {
@@ -120,21 +113,28 @@ async function getContestPlagiarismResults(contestId: string): Promise<Plagiaris
 
 const plagiarismModel = { checkContestPlagiarism, getContestPlagiarismResults };
 
+declare module 'hydrooj' {
+    interface Model {
+        plagiarism: typeof plagiarismModel;
+    }
+}
+
+global.Hydro.model.plagiarism = plagiarismModel;
+
 /**
  * 抄袭检测主页面 Handler
  */
 class PlagiarismMainHandler extends Handler {
-    @param('tid', Types.ObjectId)
-    async get(domainId: string, tid: ObjectId) {
+    async get({ domainId, tid }: { domainId: string; tid: ObjectId }) {
         // 检查权限：需要是比赛管理员
-        const tdoc = await this.model.contest.get(domainId, tid);
+        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
         if (!tdoc) {
             throw new NotFoundError(tid.toString());
         }
         
         // 检查是否有管理权限
-        if (this.user._id !== tdoc.owner && !this.user.hasPerm(PRIV.PRIV_EDIT_CONTEST)) {
-            throw new PermissionError(PRIV.PRIV_EDIT_CONTEST);
+        if (this.user._id !== tdoc.owner) {
+            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
         }
 
         // 获取历史检测结果
@@ -161,23 +161,20 @@ class PlagiarismMainHandler extends Handler {
  * 执行抄袭检测 Handler
  */
 class PlagiarismCheckHandler extends Handler {
-    @param('tid', Types.ObjectId)
-    @param('minTokens', Types.PositiveInt, true)
-    @param('similarityThreshold', Types.Float, true)
-    async post(
-        domainId: string, 
-        tid: ObjectId, 
-        minTokens: number = 9, 
-        similarityThreshold: number = 0.0
-    ) {
+    async post({ domainId, tid, minTokens = 9, similarityThreshold = 0.0 }: { 
+        domainId: string; 
+        tid: ObjectId; 
+        minTokens?: number; 
+        similarityThreshold?: number;
+    }) {
         // 检查权限
-        const tdoc = await this.model.contest.get(domainId, tid);
+        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
         if (!tdoc) {
             throw new NotFoundError(tid.toString());
         }
         
-        if (this.user._id !== tdoc.owner && !this.user.hasPerm(PRIV.PRIV_EDIT_CONTEST)) {
-            throw new PermissionError(PRIV.PRIV_EDIT_CONTEST);
+        if (this.user._id !== tdoc.owner) {
+            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
         }
 
         try {
@@ -208,17 +205,15 @@ class PlagiarismCheckHandler extends Handler {
  * 查看检测结果详情 Handler
  */
 class PlagiarismDetailHandler extends Handler {
-    @param('tid', Types.ObjectId)
-    @param('rid', Types.String)
-    async get(domainId: string, tid: ObjectId, rid: string) {
+    async get({ domainId, tid, rid }: { domainId: string; tid: ObjectId; rid: string }) {
         // 检查权限
-        const tdoc = await this.model.contest.get(domainId, tid);
+        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
         if (!tdoc) {
             throw new NotFoundError(tid.toString());
         }
         
-        if (this.user._id !== tdoc.owner && !this.user.hasPerm(PRIV.PRIV_EDIT_CONTEST)) {
-            throw new PermissionError(PRIV.PRIV_EDIT_CONTEST);
+        if (this.user._id !== tdoc.owner) {
+            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
         }
 
         // 获取检测结果
@@ -267,17 +262,15 @@ class PlagiarismDetailHandler extends Handler {
  * 导出检测结果 Handler
  */
 class PlagiarismExportHandler extends Handler {
-    @param('tid', Types.ObjectId)
-    @param('rid', Types.String)
-    async get(domainId: string, tid: ObjectId, rid: string) {
+    async get({ domainId, tid, rid }: { domainId: string; tid: ObjectId; rid: string }) {
         // 检查权限
-        const tdoc = await this.model.contest.get(domainId, tid);
+        const tdoc = await global.Hydro.model.contest.get(domainId, tid);
         if (!tdoc) {
             throw new NotFoundError(tid.toString());
         }
         
-        if (this.user._id !== tdoc.owner && !this.user.hasPerm(PRIV.PRIV_EDIT_CONTEST)) {
-            throw new PermissionError(PRIV.PRIV_EDIT_CONTEST);
+        if (this.user._id !== tdoc.owner) {
+            this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
         }
 
         // 获取检测结果
@@ -301,7 +294,4 @@ export async function apply(ctx: Context) {
     ctx.Route('plagiarism_check', '/contest/:tid/plagiarism/check', PlagiarismCheckHandler, PRIV.PRIV_USER_PROFILE);
     ctx.Route('plagiarism_detail', '/contest/:tid/plagiarism/:rid', PlagiarismDetailHandler, PRIV.PRIV_USER_PROFILE);
     ctx.Route('plagiarism_export', '/contest/:tid/plagiarism/:rid/export', PlagiarismExportHandler, PRIV.PRIV_USER_PROFILE);
-
-    // 在比赛管理页面添加抄袭检测入口（通过修改模板）
-    ctx.addScript('phosphorus-plagiarism', 'phosphorus-plagiarism.js');
 }
