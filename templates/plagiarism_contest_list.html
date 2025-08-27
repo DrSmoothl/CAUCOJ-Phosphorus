@@ -2,6 +2,15 @@
 {% block title %}查重记录 - 比赛列表{% endblock %}
 
 {% block content %}
+<!-- 基础调试信息 -->
+<div style="background: yellow; padding: 10px; margin: 10px; border: 2px solid red;">
+  <h2>🐛 模板调试信息</h2>
+  <p><strong>模板已加载:</strong> plagiarism_contest_list.html</p>
+  <p><strong>contests 变量:</strong> {{ contests }}</p>
+  <p><strong>contests 类型:</strong> {{ contests.__class__.__name__ if contests else 'None' }}</p>
+  <p><strong>contests 长度:</strong> {{ contests|length if contests else 'N/A' }}</p>
+  <p><strong>error 变量:</strong> {{ error if error else 'None' }}</p>
+</div>
 <style>
 /* 比赛列表页面样式 */
 .contest-list-container {
@@ -519,6 +528,12 @@
 </div>
 
 <script>
+// 将服务器端变量传递给客户端
+window.phosphorusData = {
+  contests: {{ contests|tojson if contests else '[]' }},
+  error: {{ error|tojson if error else 'null' }}
+};
+
 // 搜索功能
 function searchContests() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -567,8 +582,10 @@ document.addEventListener('keydown', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
   // 输出调试信息
   console.log('[Phosphorus Template] Page loaded');
-  console.log('[Phosphorus Template] contests variable:', typeof contests !== 'undefined' ? contests : 'undefined');
-  console.log('[Phosphorus Template] error variable:', typeof error !== 'undefined' ? error : 'undefined');
+  console.log('[Phosphorus Template] phosphorusData:', window.phosphorusData);
+  console.log('[Phosphorus Template] contests variable:', window.phosphorusData.contests);
+  console.log('[Phosphorus Template] contests length:', window.phosphorusData.contests ? window.phosphorusData.contests.length : 'null');
+  console.log('[Phosphorus Template] error variable:', window.phosphorusData.error);
   
   // 聚焦搜索框
   const searchInput = document.getElementById('searchInput');

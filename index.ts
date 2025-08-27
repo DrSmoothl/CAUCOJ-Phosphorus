@@ -12,7 +12,9 @@ const PLUGIN_VERSION = '1.0.0';
 
 // Get Phosphorus API base URL from system settings
 function getPhosphorusApiBase(): string {
-    return SystemModel.get('phosphorus.api.base') || 'http://localhost:8000';
+    const apiBase = SystemModel.get('phosphorus.api.base') || 'http://localhost:8000';
+    console.log('[Phosphorus Plugin] API Base URL:', apiBase);
+    return apiBase;
 }
 
 /**
