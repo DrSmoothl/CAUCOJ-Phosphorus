@@ -219,40 +219,115 @@ class ContestPlagiarismListHandler extends Handler {
         console.log('[Phosphorus] ContestPlagiarismListHandler.get() called');
         
         try {
-            console.log('[Phosphorus] Calling API endpoint: /api/v1/contests/plagiarism');
-            const result = await makeApiRequest('/api/v1/contests/plagiarism');
+            // 直接从数据库查询有查重结果的比赛
+            let plagiarismResults: any[] = [];
             
-            console.log('[Phosphorus] API result:', result);
-            console.log('[Phosphorus] Result success:', result.success);
-            console.log('[Phosphorus] Result data length:', result.data ? result.data.length : 'null/undefined');
-            
-            if (result.success) {
-                const contests = result.data || [];
-                console.log('[Phosphorus] Contests data:', contests);
-                
-                // Enrich contest data
-                contests.forEach((contest: any, index: number) => {
-                    console.log(`[Phosphorus] Processing contest ${index}:`, contest);
-                    contest.begin_at = contest.begin_at ? new Date(contest.begin_at) : null;
-                    contest.end_at = contest.end_at ? new Date(contest.end_at) : null;
-                    contest.last_check_at = contest.last_check_at ? new Date(contest.last_check_at) : null;
-                });
-                
-                console.log('[Phosphorus] Enriched contests:', contests);
-                
-                this.response.template = 'plagiarism_contest_list.html';
-                this.response.body = { contests };
-                console.log('[Phosphorus] Template set to plagiarism_contest_list.html with contests:', contests.length);
-            } else {
-                console.warn('[Phosphorus] API returned success=false:', result.message);
-                this.response.template = 'plagiarism_contest_list.html';
-                this.response.body = { contests: [], error: result.message || 'Failed to fetch contests' };
+            try {
+                // 直接访问check_plagiarism_results集合
+                const db_raw = db as any;
+                plagiarismResults = await db_raw.db.collection('check_plagiarism_results').find({}).toArray();
+            } catch (error) {
+                console.warn('Failed to query check_plagiarism_results collection:', error);
+                // 如果失败，尝试从document集合查询
+                plagiarismResults = await db.collection('document').find({
+                    docType: 'plagiarism_result'
+                }).toArray();
             }
+            
+            console.log(`[Phosphorus] Found ${plagiarismResults.length} plagiarism results in database`);
+            
+            // 按contest_id分组统计
+            const contestsMap = new Map<string, any>();
+            
+            for (const result of plagiarismResults) {
+                const contestId = result.contest_id;
+                
+                if (!contestsMap.has(contestId)) {
+                    // 获取比赛基本信息
+                    let contestInfo: any = {
+                        id: contestId,
+                        title: `比赛 ${contestId}`,
+                        description: '',
+                        begin_at: null,
+                        end_at: null,
+                        total_problems: 0,
+                        checked_problems: 0,
+                        last_check_at: null,
+                        problem_ids: new Set()
+                    };
+                    
+                    // 尝试从比赛集合获取详细信息
+                    try {
+                        const contestDoc = await this.findContestById(contestId);
+                        if (contestDoc) {
+                            contestInfo.title = contestDoc.title || `比赛 ${contestId}`;
+                            contestInfo.description = contestDoc.content || '';
+                            contestInfo.begin_at = contestDoc.beginAt;
+                            contestInfo.end_at = contestDoc.endAt;
+                            contestInfo.total_problems = Array.isArray(contestDoc.pids) ? contestDoc.pids.length : 0;
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to get contest info for ${contestId}:`, error);
+                    }
+                    
+                    contestsMap.set(contestId, contestInfo);
+                }
+                
+                const contest = contestsMap.get(contestId);
+                
+                // 更新统计信息
+                contest.problem_ids.add(result.problem_id);
+                contest.checked_problems = contest.problem_ids.size;
+                
+                // 更新最后检查时间
+                if (result.created_at) {
+                    const checkTime = new Date(result.created_at);
+                    if (!contest.last_check_at || checkTime > contest.last_check_at) {
+                        contest.last_check_at = checkTime;
+                    }
+                }
+            }
+            
+            // 转换为数组并清理Set对象
+            const contests = Array.from(contestsMap.values()).map(contest => {
+                delete contest.problem_ids; // 删除临时的Set对象
+                return contest;
+            });
+            
+            // 按最后检查时间排序
+            contests.sort((a, b) => {
+                if (!a.last_check_at) return 1;
+                if (!b.last_check_at) return -1;
+                return b.last_check_at.getTime() - a.last_check_at.getTime();
+            });
+            
+            console.log(`[Phosphorus] Processed ${contests.length} contests with plagiarism data`);
+            
+            this.response.template = 'plagiarism_contest_list.html';
+            this.response.body = { contests };
+            
         } catch (error: any) {
             console.error('[Phosphorus] Exception in ContestPlagiarismListHandler:', error);
             this.response.template = 'plagiarism_contest_list.html';
             this.response.body = { contests: [], error: error.message };
         }
+    }
+    
+    private async findContestById(contestId: string): Promise<any | null> {
+        // 尝试多种方式查找比赛
+        let contestDoc: any = null;
+        
+        // 遍历查找匹配的ID（最通用的方法）
+        const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+        
+        contestDoc = allContests.find(doc => {
+            const docId = doc._id;
+            return docId.toString() === contestId.toString() || 
+                   docId === contestId ||
+                   (typeof docId === 'object' && docId.toHexString && docId.toHexString() === contestId);
+        });
+        
+        return contestDoc;
     }
 }
 
@@ -299,21 +374,8 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestInfo(contestId: string): Promise<any> {
         try {
-            // 首先尝试从查重结果API获取比赛信息
-            const result = await makeApiRequest('/api/v1/contests/plagiarism');
-            if (result.success) {
-                const contests = result.data || [];
-                const contest = contests.find((c: any) => c.id.toString() === contestId.toString());
-                if (contest) {
-                    contest.begin_at = contest.begin_at ? new Date(contest.begin_at) : null;
-                    contest.end_at = contest.end_at ? new Date(contest.end_at) : null;
-                    contest.last_check_at = contest.last_check_at ? new Date(contest.last_check_at) : null;
-                    return contest;
-                }
-            }
-            
-            // 如果在查重结果中找不到，直接从数据库查找比赛
-            console.log(`[Phosphorus] Contest ${contestId} not found in plagiarism results, trying direct database lookup`);
+            // 直接从数据库查找比赛，不依赖后端API
+            console.log(`[Phosphorus] Looking up contest ${contestId} directly from database`);
             
             let contestDoc: any = null;
             
@@ -331,11 +393,32 @@ class ContestPlagiarismDetailHandler extends Handler {
             
             if (contestDoc) {
                 console.log(`[Phosphorus] Found contest: ${contestDoc.title || 'Unknown'} with ID: ${contestDoc._id}`);
-            } else {
-                console.log(`[Phosphorus] Contest ${contestId} not found in database`);
-            }
-            
-            if (contestDoc) {
+                
+                // 查询该比赛的查重结果统计
+                let checkedProblems = 0;
+                let lastCheckAt: Date | null = null;
+                
+                try {
+                    const db_raw = db as any;
+                    const plagiarismResults = await db_raw.db.collection('check_plagiarism_results').find({
+                        contest_id: contestId
+                    }).toArray();
+                    
+                    const problemIds = new Set();
+                    for (const result of plagiarismResults) {
+                        problemIds.add(result.problem_id);
+                        if (result.created_at) {
+                            const checkTime = new Date(result.created_at);
+                            if (!lastCheckAt || checkTime > lastCheckAt) {
+                                lastCheckAt = checkTime;
+                            }
+                        }
+                    }
+                    checkedProblems = problemIds.size;
+                } catch (error) {
+                    console.warn('Failed to get plagiarism stats:', error);
+                }
+                
                 return {
                     id: contestDoc._id.toString(),
                     title: contestDoc.title || `比赛 ${contestDoc._id}`,
@@ -343,9 +426,11 @@ class ContestPlagiarismDetailHandler extends Handler {
                     begin_at: contestDoc.beginAt ? new Date(contestDoc.beginAt) : null,
                     end_at: contestDoc.endAt ? new Date(contestDoc.endAt) : null,
                     total_problems: Array.isArray(contestDoc.pids) ? contestDoc.pids.length : 0,
-                    checked_problems: 0, // 将通过其他方式计算
-                    last_check_at: null
+                    checked_problems: checkedProblems,
+                    last_check_at: lastCheckAt
                 };
+            } else {
+                console.log(`[Phosphorus] Contest ${contestId} not found in database`);
             }
             
         } catch (error) {
@@ -356,33 +441,103 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestProblems(contestId: string): Promise<any[]> {
         try {
-            // Get problems
-            const problemsResult = await makeApiRequest(`/api/v1/contest/${contestId}/problems`);
-            if (!problemsResult.success) {
-                return [];
-            }
+            // 直接从数据库查询查重结果
+            const plagiarismResults = await db.collection('document').find({
+                contest_id: contestId,
+                docType: 'plagiarism_result' // 使用特殊的docType标识查重结果
+            }).toArray();
             
-            const problems = problemsResult.data || [];
-            
-            // Get plagiarism results for each problem
-            for (const problem of problems) {
-                problem.last_check_at = problem.last_check_at ? new Date(problem.last_check_at) : null;
-                
+            // 如果没有找到，尝试直接查询check_plagiarism_results集合
+            let results = plagiarismResults;
+            if (results.length === 0) {
                 try {
-                    const resultResponse = await makeApiRequest(
-                        `/api/v1/contest/${contestId}/problem/${problem.id}/plagiarism`
-                    );
-                    if (resultResponse.success && resultResponse.data) {
-                        problem.plagiarism_result = resultResponse.data;
-                    }
+                    // 直接访问MongoDB集合
+                    const db_raw = db as any;
+                    results = await db_raw.db.collection('check_plagiarism_results').find({
+                        contest_id: contestId
+                    }).toArray();
                 } catch (error) {
-                    console.warn(`Failed to get plagiarism result for problem ${problem.id}:`, error);
+                    console.warn('Failed to query check_plagiarism_results collection:', error);
+                    results = [];
                 }
             }
             
+            console.log(`[Phosphorus] Found ${results.length} plagiarism results for contest ${contestId}`);
+            
+            // 按problem_id分组整理结果
+            const problemsMap = new Map<number, any>();
+            
+            for (const result of results) {
+                const problemId = result.problem_id;
+                
+                if (!problemsMap.has(problemId)) {
+                    // 获取题目基本信息
+                    let problemInfo: any = {
+                        id: problemId,
+                        title: `题目 ${problemId}`,
+                        languages: [],
+                        total_submissions: 0,
+                        checked_submissions: 0,
+                        last_check_at: null,
+                        plagiarism_result: null
+                    };
+                    
+                    // 尝试从题目集合获取更详细的信息
+                    try {
+                        const problemDoc = await db.collection('document').findOne({
+                            docType: 10, // 题目文档类型
+                            pid: problemId
+                        });
+                        
+                        if (problemDoc) {
+                            problemInfo.title = problemDoc.title || `题目 ${problemId}`;
+                            // 可以添加更多字段
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to get problem info for ${problemId}:`, error);
+                    }
+                    
+                    problemsMap.set(problemId, problemInfo);
+                }
+                
+                const problem = problemsMap.get(problemId);
+                
+                // 更新查重结果信息
+                problem.plagiarism_result = {
+                    analysis_id: result.analysis_id,
+                    total_submissions: result.total_submissions,
+                    total_comparisons: result.total_comparisons,
+                    execution_time_ms: result.execution_time_ms,
+                    high_similarity_pairs: result.high_similarity_pairs || [],
+                    clusters: result.clusters || [],
+                    submission_stats: result.submission_stats || [],
+                    failed_submissions: result.failed_submissions || [],
+                    created_at: result.created_at
+                };
+                
+                // 更新统计信息
+                problem.total_submissions = result.total_submissions;
+                problem.checked_submissions = result.total_submissions - (result.failed_submissions?.length || 0);
+                problem.last_check_at = result.created_at;
+                
+                // 从high_similarity_pairs中提取语言信息（如果可能）
+                if (result.high_similarity_pairs && result.high_similarity_pairs.length > 0) {
+                    // 这里可以根据submission名称推断语言，但数据结构中没有直接的语言信息
+                    // 暂时使用默认值
+                    if (problem.languages.length === 0) {
+                        problem.languages = ['C++', 'Java', 'Python']; // 默认常见语言
+                    }
+                }
+            }
+            
+            // 转换Map为数组并排序
+            const problems = Array.from(problemsMap.values()).sort((a, b) => a.id - b.id);
+            
+            console.log(`[Phosphorus] Processed ${problems.length} problems with plagiarism data`);
             return problems;
+            
         } catch (error) {
-            console.error('Failed to get contest problems:', error);
+            console.error('Failed to get contest problems from database:', error);
             return [];
         }
     }
