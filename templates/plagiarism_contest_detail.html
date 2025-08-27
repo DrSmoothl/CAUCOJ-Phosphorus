@@ -658,8 +658,10 @@
 
               {% if problem.languages %}
               <div class="problem-languages">
-                {% for lang in problem.languages[:5] %}
-                <span class="language-tag">{{ lang }}</span>
+                {% for lang in problem.languages %}
+                  {% if loop.index <= 5 %}
+                    <span class="language-tag">{{ lang }}</span>
+                  {% endif %}
                 {% endfor %}
                 {% if problem.languages|length > 5 %}
                 <span class="language-tag">+{{ problem.languages|length - 5 }}</span>
@@ -762,12 +764,12 @@ function refreshData() {
 function exportData() {
   const contestId = '{{ contest.id }}';
   const data = {
-    contest: {{ contest | dump if contest else '{}' }},
-    problems: {{ problems | dump if problems else '[]' }},
+    contest: {{ contest | dump if contest else '{}' | safe }},
+    problems: {{ problems | dump if problems else '[]' | safe }},
     stats: {
-      total_problems: {{ problems|length or 0 }},
-      total_high_similarity: {{ total_high_similarity or 0 }},
-      avg_similarity: {{ avg_similarity or 0 }}
+      total_problems: {{ problems|length if problems else 0 }},
+      total_high_similarity: {{ total_high_similarity if total_high_similarity else 0 }},
+      avg_similarity: {{ avg_similarity if avg_similarity else 0 }}
     },
     export_time: new Date().toISOString()
   };
