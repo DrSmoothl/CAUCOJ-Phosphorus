@@ -706,6 +706,10 @@ class NewPlagiarismTaskHandler extends Handler {
         try {
             const { contest_id, problem_ids, min_tokens = 9, similarity_threshold = 0.7 } = this.request.body;
             
+            console.log('[Phosphorus] NewPlagiarismTaskHandler.post() called with:', {
+                contest_id, problem_ids, min_tokens, similarity_threshold
+            });
+            
             // 验证输入
             if (!contest_id) {
                 throw new Error('请选择比赛');
@@ -718,7 +722,7 @@ class NewPlagiarismTaskHandler extends Handler {
             // 获取比赛信息用于显示
             const contest = await this.getContestById(contest_id.toString());
             
-            // 调用Phosphorus API创建查重任务
+            // 调用Phosphorus API创建异步查重任务
             const taskData = {
                 contest_id: contest_id.toString(),
                 problem_ids: problem_ids.map((id: any) => parseInt(id.toString())),
@@ -726,10 +730,19 @@ class NewPlagiarismTaskHandler extends Handler {
                 similarity_threshold: parseFloat(similarity_threshold.toString())
             };
             
-            const result = await makeApiRequest('/api/v1/contest/plagiarism/problems', 'POST', taskData);
+            console.log('[Phosphorus] Calling async task API with data:', taskData);
+            
+            // 使用新的异步任务接口
+            const result = await makeApiRequest('/api/v1/contest/plagiarism/problems/async', 'POST', taskData);
+            
+            console.log('[Phosphorus] Async task API result:', result);
             
             if (result.success) {
-                // 成功创建任务，显示等待页面
+                // 成功创建任务，立即重定向到等待页面
+                const taskInfo = result.data;
+                console.log('[Phosphorus] Task created successfully, showing waiting page');
+                
+                // 使用现有的 task_submitted.html 模板显示等待页面
                 this.response.template = 'task_submitted.html';
                 this.response.body = {
                     contest_id: contest_id.toString(),
@@ -737,15 +750,18 @@ class NewPlagiarismTaskHandler extends Handler {
                     problem_count: problem_ids.length,
                     min_tokens: parseInt(min_tokens.toString()),
                     similarity_threshold: Math.round(parseFloat(similarity_threshold.toString()) * 100),
-                    task_id: result.task_id || null,
-                    estimated_time: this.estimateProcessingTime(problem_ids.length),
+                    task_id: taskInfo.task_id,
+                    estimated_time: `${Math.ceil((taskInfo.problem_count || 1) * 2)} 分钟`,
                     success: true
                 };
+                
             } else {
                 throw new Error(result.message || '创建查重任务失败');
             }
             
         } catch (error: any) {
+            console.error('[Phosphorus] Error in task creation:', error);
+            
             // 重新显示表单，包含错误信息
             const contests = await this.getAllContests();
             
