@@ -653,7 +653,7 @@
           </h2>
         </div>
 
-        <form id="plagiarismForm" class="form-body">
+        <form id="plagiarismForm" class="form-body" method="POST" action="/plagiarism/new">
           <!-- 步骤1: 选择比赛 -->
           <div class="form-step active" id="form-step-1">
             <div class="form-group">
@@ -669,6 +669,12 @@
                        autocomplete="off">
                 <div class="search-results" id="searchResults"></div>
               </div>
+      <!-- 错误处理 -->
+      {% if error %}
+      <div class="error-message show">
+        {{ error }}
+      </div>
+      {% endif %}
               <div class="error-message" id="contestError"></div>
             </div>
 
@@ -818,31 +824,11 @@ document.addEventListener('DOMContentLoaded', function() {
 // 加载比赛列表
 async function loadContests() {
   try {
-    // 这里应该调用实际的API
-    // const response = await fetch('/api/v1/contests');
-    // contests = await response.json();
-    
-    // 模拟数据
-    contests = [
-      {
-        id: '507f1f77bcf86cd799439011',
-        title: '2024年春季编程竞赛',
-        description: '面向大一学生的基础编程竞赛',
-        begin_at: '2024-03-01 09:00:00',
-        end_at: '2024-03-01 12:00:00',
-        total_problems: 5
-      },
-      {
-        id: '507f1f77bcf86cd799439012',
-        title: 'ACM算法竞赛选拔赛',
-        description: 'ACM-ICPC校队选拔',
-        begin_at: '2024-03-15 14:00:00',
-        end_at: '2024-03-15 17:00:00',
-        total_problems: 8
-      }
-    ];
+    // 使用从后端传递的比赛数据
+    contests = {{ contests | tojson }} || [];
   } catch (error) {
     console.error('Failed to load contests:', error);
+    contests = [];
   }
 }
 
@@ -1222,23 +1208,39 @@ async function submitForm() {
   };
   
   try {
-    // 这里应该调用实际的API
-    // const response = await fetch('/api/v1/contest/plagiarism/problems', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify(formData)
-    // });
+    // 创建隐藏的表单字段并提交
+    const form = document.getElementById('plagiarismForm');
     
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 清空现有的隐藏字段
+    form.querySelectorAll('input[type="hidden"]').forEach(el => el.remove());
     
-    // 成功后跳转到结果页面
-    window.location.href = `/plagiarism/contest/${selectedContestId}`;
+    // 添加新的隐藏字段
+    Object.entries(formData).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          const arrayInput = document.createElement('input');
+          arrayInput.type = 'hidden';
+          arrayInput.name = `${key}[${index}]`;
+          arrayInput.value = item.toString();
+          form.appendChild(arrayInput);
+        });
+      } else {
+        input.value = value.toString();
+        form.appendChild(input);
+      }
+    });
+    
+    // 提交表单
+    form.submit();
     
   } catch (error) {
     console.error('Failed to submit form:', error);
     alert('提交失败，请重试');
-  } finally {
+    
     nextBtn.disabled = false;
     spinner.style.display = 'none';
   }

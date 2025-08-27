@@ -3,7 +3,7 @@
 // @filename: index.ts
 import {
     Context, definePlugin, Handler, NotFoundError,
-    PRIV, SystemModel
+    PRIV, SystemModel, db
 } from 'hydrooj';
 
 // Plugin configuration
@@ -275,7 +275,7 @@ class ContestPlagiarismDetailHandler extends Handler {
             const result = await makeApiRequest('/api/v1/contests/plagiarism');
             if (result.success) {
                 const contests = result.data || [];
-                const contest = contests.find((c: any) => c.id === contestId);
+                const contest = contests.find((c: any) => c.id.toString() === contestId.toString());
                 if (contest) {
                     contest.begin_at = contest.begin_at ? new Date(contest.begin_at) : null;
                     contest.end_at = contest.end_at ? new Date(contest.end_at) : null;
@@ -380,7 +380,7 @@ class ProblemPlagiarismDetailHandler extends Handler {
             const result = await makeApiRequest('/api/v1/contests/plagiarism');
             if (result.success) {
                 const contests = result.data || [];
-                return contests.find((c: any) => c.id === contestId) || null;
+                return contests.find((c: any) => c.id.toString() === contestId.toString()) || null;
             }
         } catch (error) {
             console.error('Failed to get contest info:', error);
@@ -393,7 +393,7 @@ class ProblemPlagiarismDetailHandler extends Handler {
             const result = await makeApiRequest(`/api/v1/contest/${contestId}/problems`);
             if (result.success) {
                 const problems = result.data || [];
-                const problem = problems.find((p: any) => p.id === problemId);
+                const problem = problems.find((p: any) => p.id.toString() === problemId.toString());
                 if (problem) {
                     problem.last_check_at = problem.last_check_at ? new Date(problem.last_check_at) : null;
                     return problem;
@@ -559,8 +559,105 @@ class NewPlagiarismTaskHandler extends Handler {
     async get() {
         this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
-        this.response.template = 'new_task.html';
-        this.response.body = {};
+        try {
+            // 获取所有比赛信息用于下拉选择
+            const contests = await this.getAllContests();
+            
+            this.response.template = 'new_task.html';
+            this.response.body = {
+                contests: contests
+            };
+        } catch (error: any) {
+            this.response.template = 'new_task.html';
+            this.response.body = {
+                error: error.message,
+                contests: []
+            };
+        }
+    }
+    
+    async post() {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        try {
+            const { contest_id, problem_ids, min_tokens = 9, similarity_threshold = 0.7 } = this.request.body;
+            
+            // 验证输入
+            if (!contest_id) {
+                throw new Error('请选择比赛');
+            }
+            
+            if (!problem_ids || !Array.isArray(problem_ids) || problem_ids.length === 0) {
+                throw new Error('请选择至少一个题目');
+            }
+            
+            // 调用Phosphorus API创建查重任务
+            const taskData = {
+                contest_id: contest_id.toString(),
+                problem_ids: problem_ids.map((id: any) => parseInt(id.toString())),
+                min_tokens: parseInt(min_tokens.toString()),
+                similarity_threshold: parseFloat(similarity_threshold.toString())
+            };
+            
+            const result = await makeApiRequest('/api/v1/contest/plagiarism/problems', 'POST', taskData);
+            
+            if (result.success) {
+                // 成功创建任务，重定向到比赛详情页
+                this.response.redirect = `/plagiarism/contest/${contest_id}`;
+            } else {
+                throw new Error(result.message || '创建查重任务失败');
+            }
+            
+        } catch (error: any) {
+            // 重新显示表单，包含错误信息
+            const contests = await this.getAllContests();
+            
+            this.response.template = 'new_task.html';
+            this.response.body = {
+                error: error.message,
+                contests: contests,
+                form_data: this.request.body // 保留用户输入的数据
+            };
+        }
+    }
+    
+    private async getAllContests(): Promise<any[]> {
+        try {
+            // 从document集合中查询所有比赛
+            const contestDocs = await db.collection('document').find({
+                docType: 30 // 30 是比赛文档类型
+            }).sort({ _id: -1 }).limit(100).toArray(); // 获取最近100个比赛
+            
+            return contestDocs.map(doc => ({
+                id: doc.docId.toString(), // 转换为字符串
+                title: doc.title || `比赛 ${doc.docId}`,
+                begin_at: doc.beginAt ? new Date(doc.beginAt) : null,
+                end_at: doc.endAt ? new Date(doc.endAt) : null,
+                owner: doc.owner || 0,
+                status: this.getContestStatus(doc)
+            }));
+        } catch (error) {
+            console.error('Failed to get contests:', error);
+            return [];
+        }
+    }
+    
+    private getContestStatus(doc: any): string {
+        const now = new Date();
+        const beginAt = doc.beginAt ? new Date(doc.beginAt) : null;
+        const endAt = doc.endAt ? new Date(doc.endAt) : null;
+        
+        if (!beginAt || !endAt) {
+            return '未定时间';
+        }
+        
+        if (now < beginAt) {
+            return '未开始';
+        } else if (now >= beginAt && now <= endAt) {
+            return '进行中';
+        } else {
+            return '已结束';
+        }
     }
 }
 
