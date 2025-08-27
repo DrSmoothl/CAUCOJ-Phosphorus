@@ -576,6 +576,45 @@ class NewPlagiarismTaskHandler extends Handler {
         }
     }
     
+    // 新增：获取比赛题目的API接口
+    async getProblems() {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        try {
+            const contestId = this.request.query.contest_id;
+            if (!contestId) {
+                throw new Error('缺少比赛ID参数');
+            }
+            
+            const problems = await this.getContestProblems(contestId);
+            
+            this.response.body = {
+                success: true,
+                problems: problems
+            };
+            this.response.type = 'application/json';
+        } catch (error: any) {
+            this.response.body = {
+                success: false,
+                error: error.message,
+                problems: []
+            };
+            this.response.type = 'application/json';
+        }
+    }
+    
+    // 处理不同HTTP方法的路由
+    async __call() {
+        if (this.request.path === '/plagiarism/api/problems') {
+            return this.getProblems();
+        }
+        if (this.request.method === 'GET') {
+            return this.get();
+        } else if (this.request.method === 'POST') {
+            return this.post();
+        }
+    }
+    
     async post() {
         this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
@@ -655,6 +694,43 @@ class NewPlagiarismTaskHandler extends Handler {
         }
     }
     
+    private async getContestProblems(contestId: string): Promise<any[]> {
+        try {
+            // 首先获取比赛文档
+            const contestDoc = await db.collection('document').findOne({
+                _id: contestId,
+                docType: 30
+            });
+            
+            if (!contestDoc || !contestDoc.pids) {
+                return [];
+            }
+            
+            // 获取比赛中的题目ID列表
+            const problemIds = contestDoc.pids.map((pid: any) => parseInt(pid.toString()));
+            
+            // 查询这些题目的详细信息
+            const problemDocs = await db.collection('document').find({
+                docType: 10, // 10 是题目文档类型
+                docId: { $in: problemIds }
+            }).toArray();
+            
+            return problemDocs.map(doc => ({
+                id: doc.docId,
+                title: doc.title || `题目 ${doc.docId}`,
+                total_submissions: doc.nSubmit || 0,
+                accepted_submissions: doc.nAccept || 0,
+                difficulty: doc.difficulty || 0,
+                tags: doc.tag || [],
+                pid: doc.pid || doc.docId.toString(),
+                can_analyze: (doc.nSubmit || 0) >= 5 // 至少5个提交才能分析
+            }));
+        } catch (error) {
+            console.error('Failed to get contest problems:', error);
+            return [];
+        }
+    }
+    
     private getContestStatus(doc: any): string {
         const now = new Date();
         const beginAt = doc.beginAt ? new Date(doc.beginAt) : null;
@@ -684,6 +760,7 @@ export default definePlugin({
         ctx.Route('plagiarism_contest_detail', '/plagiarism/contest/:contest_id', ContestPlagiarismDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_problem_detail', '/plagiarism/contest/:contest_id/:problem_id', ProblemPlagiarismDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_new_task', '/plagiarism/new', NewPlagiarismTaskHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('plagiarism_get_problems', '/plagiarism/api/problems', NewPlagiarismTaskHandler, PRIV.PRIV_EDIT_SYSTEM);
         
         // Add to navigation menu
         ctx.injectUI('UserDropdown', 'Userinfo', {

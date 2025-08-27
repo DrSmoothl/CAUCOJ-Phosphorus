@@ -354,6 +354,31 @@
   font-weight: 500;
 }
 
+.difficulty-0 {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.difficulty-1, .difficulty-2 {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.difficulty-3, .difficulty-4 {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.difficulty-5, .difficulty-6, .difficulty-7 {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.difficulty-8, .difficulty-9, .difficulty-10 {
+  background: #fdf2f8;
+  color: #be185d;
+}
+
 /* 选择操作 */
 .selection-actions {
   display: flex;
@@ -826,49 +851,22 @@ function removeSelectedContest() {
 // 加载题目列表
 async function loadProblems(contestId) {
   try {
-    // 这里应该调用实际的API
-    // const response = await fetch(`/api/v1/contest/${contestId}/problems`);
-    // problems = await response.json();
+    // 调用实际的API获取题目
+    const response = await fetch(`/plagiarism/api/problems?contest_id=${contestId}`);
+    const data = await response.json();
     
-    // 模拟数据
-    problems = [
-      {
-        id: 1001,
-        title: 'A+B Problem',
-        total_submissions: 150,
-        accepted_submissions: 120,
-        languages: ['c', 'cc', 'py', 'java'],
-        can_analyze: true
-      },
-      {
-        id: 1002,
-        title: '字符串匹配',
-        total_submissions: 89,
-        accepted_submissions: 45,
-        languages: ['cc', 'py', 'java'],
-        can_analyze: true
-      },
-      {
-        id: 1003,
-        title: '图论最短路径',
-        total_submissions: 32,
-        accepted_submissions: 18,
-        languages: ['cc', 'java'],
-        can_analyze: true
-      },
-      {
-        id: 1004,
-        title: '动态规划入门',
-        total_submissions: 5,
-        accepted_submissions: 2,
-        languages: ['cc'],
-        can_analyze: false
-      }
-    ];
+    if (data.success) {
+      problems = data.problems;
+    } else {
+      console.error('Failed to load problems:', data.error);
+      problems = [];
+    }
     
     renderProblems();
   } catch (error) {
     console.error('Failed to load problems:', error);
+    problems = [];
+    renderProblems();
   }
 }
 
@@ -902,7 +900,8 @@ function renderProblems() {
           ${!problem.can_analyze ? '<br><span style="color: #ef4444;">⚠️ 提交数不足，无法分析</span>' : ''}
         </div>
         <div class="problem-languages">
-          ${problem.languages.map(lang => `<span class="language-tag">${lang}</span>`).join('')}
+          ${problem.tags ? problem.tags.slice(0, 3).map(tag => `<span class="language-tag">${tag}</span>`).join('') : ''}
+          ${problem.difficulty !== undefined ? `<span class="language-tag difficulty-${problem.difficulty}">难度: ${problem.difficulty}</span>` : ''}
         </div>
       </div>
     `;
