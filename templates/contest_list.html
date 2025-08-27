@@ -482,7 +482,7 @@
               <td>
                 <div style="font-size: 0.875rem;">
                   <div><strong>高相似度:</strong> {{ contest.high_similarity_count | default(0) }} 对</div>
-                  <div><strong>平均相似度:</strong> {{ "%.1f%%" | format(contest.avg_similarity * 100) if contest.avg_similarity else 'N/A' }}</div>
+                  <div><strong>平均相似度:</strong> {% if contest.avg_similarity %}{{ (contest.avg_similarity * 100) | round(1) }}%{% else %}N/A{% endif %}</div>
                 </div>
               </td>
               <td>

@@ -526,7 +526,7 @@
             <h3 class="stats-card-title">检查进度</h3>
           </div>
           <div class="stats-card-value">{{ contest.checked_problems }}/{{ contest.total_problems }}</div>
-          <p class="stats-card-description">{{ "%.1f%%" | format((contest.checked_problems / contest.total_problems * 100) if contest.total_problems > 0 else 0) }} 已完成</p>
+          <p class="stats-card-description">{% if contest.total_problems > 0 %}{{ ((contest.checked_problems / contest.total_problems * 100) | round(1)) }}%{% else %}0%{% endif %} 已完成</p>
         </div>
 
         <div class="stats-card">
@@ -543,7 +543,7 @@
             <div class="stats-card-icon">📈</div>
             <h3 class="stats-card-title">平均相似度</h3>
           </div>
-          <div class="stats-card-value">{{ "%.1f%%" | format(avg_similarity * 100) if avg_similarity else 'N/A' }}</div>
+          <div class="stats-card-value">{% if avg_similarity %}{{ (avg_similarity * 100) | round(1) }}%{% else %}N/A{% endif %}</div>
           <p class="stats-card-description">所有检查题目的平均值</p>
         </div>
 
@@ -612,7 +612,7 @@
                 <div style="font-size: 0.875rem;">
                   <div><strong>总提交:</strong> {{ problem.total_submissions }}</div>
                   <div><strong>通过:</strong> {{ problem.accepted_submissions }}</div>
-                  <div><strong>通过率:</strong> {{ "%.1f%%" | format((problem.accepted_submissions / problem.total_submissions * 100) if problem.total_submissions > 0 else 0) }}</div>
+                  <div><strong>通过率:</strong> {% if problem.total_submissions > 0 %}{{ ((problem.accepted_submissions / problem.total_submissions * 100) | round(1)) }}%{% else %}0%{% endif %}</div>
                 </div>
               </td>
               <td>
@@ -631,7 +631,7 @@
                            style="width: {{ similarity * 100 }}%"></div>
                     </div>
                     <span class="similarity-text {% if similarity < 0.3 %}similarity-text--low{% elif similarity < 0.7 %}similarity-text--medium{% else %}similarity-text--high{% endif %}">
-                      {{ "%.1f%%" | format(similarity * 100) }}
+                      {{ (similarity * 100) | round(1) }}%
                     </span>
                   </div>
                   <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">

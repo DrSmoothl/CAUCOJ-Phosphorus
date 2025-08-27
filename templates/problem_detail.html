@@ -587,7 +587,7 @@
             </div>
             <div class="lang-stat-card">
               <span class="lang-stat-icon">📊</span>
-              <div class="lang-stat-value">{{ "%.1f%%" | format(lang_result.avg_similarity * 100) if lang_result.avg_similarity else 'N/A' }}</div>
+              <div class="lang-stat-value">{% if lang_result.avg_similarity %}{{ (lang_result.avg_similarity * 100) | round(1) }}%{% else %}N/A{% endif %}</div>
               <div class="lang-stat-label">平均相似度</div>
             </div>
           </div>
@@ -621,7 +621,7 @@
                   </div>
                   <div class="pair-similarity">
                     <div class="similarity-value {% if pair.avg_similarity < 0.3 %}similarity-value--low{% elif pair.avg_similarity < 0.7 %}similarity-value--medium{% else %}similarity-value--high{% endif %}">
-                      {{ "%.1f%%" | format(pair.avg_similarity * 100) }}
+                      {{ (pair.avg_similarity * 100) | round(1) }}%
                     </div>
                     <button class="pair-expand" id="expand-pair-{{ lang_result.language }}-{{ loop.index }}">
                       ▼
@@ -641,7 +641,7 @@
                       <div class="match-stat-label">比较次数</div>
                     </div>
                     <div class="match-stat">
-                      <div class="match-stat-value">{{ "%.1f%%" | format(pair.max_similarity * 100) if pair.max_similarity else 'N/A' }}</div>
+                      <div class="match-stat-value">{% if pair.max_similarity %}{{ (pair.max_similarity * 100) | round(1) }}%{% else %}N/A{% endif %}</div>
                       <div class="match-stat-label">最大相似度</div>
                     </div>
                     <div class="match-stat">
