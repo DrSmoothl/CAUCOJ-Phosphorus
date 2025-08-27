@@ -234,52 +234,6 @@
   box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
 }
 
-/* 比赛搜索 */
-.contest-search {
-  position: relative;
-}
-
-.search-results {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 10;
-  display: none;
-}
-
-.search-result-item {
-  padding: 12px 16px;
-  cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
-  transition: background 0.2s ease;
-}
-
-.search-result-item:hover {
-  background: #f8fafc;
-}
-
-.search-result-item:last-child {
-  border-bottom: none;
-}
-
-.contest-result-title {
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 4px;
-}
-
-.contest-result-meta {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
 /* 选中的比赛 */
 .selected-contest {
   background: #f0f9ff;
@@ -658,27 +612,26 @@
           <div class="form-step active" id="form-step-1">
             <div class="form-group">
               <label class="form-label">
-                比赛搜索 <span class="required">*</span>
+                选择比赛 <span class="required">*</span>
               </label>
               <div class="form-description">
-                搜索并选择要进行查重分析的比赛。输入比赛名称或ID进行搜索。
+                从下拉列表中选择要进行查重分析的比赛。
               </div>
-              <div class="contest-search">
-                <input type="text" class="form-input" id="contestSearch" 
-                       placeholder="输入比赛名称或ID进行搜索..." 
-                       autocomplete="off">
-                <div class="search-results" id="searchResults"></div>
-              </div>
-      <!-- 错误处理 -->
-      {% if error %}
-      <div class="error-message show">
-        {{ error }}
-      </div>
-      {% endif %}
+              <select class="form-select" id="contestSelector" onchange="selectContest(this.value)">
+                <option value="">请选择比赛</option>
+                {% for contest in contests %}
+                <option value="{{ contest.id }}" data-title="{{ contest.title }}">
+                  {{ contest.title }}
+                  {% if contest.begin_at %}
+                  - 开始时间: {{ contest.begin_at | date('%Y-%m-%d %H:%M') }}
+                  {% endif %}
+                </option>
+                {% endfor %}
+              </select>
               <div class="error-message" id="contestError"></div>
             </div>
 
-            <!-- 选中的比赛 -->
+            <!-- 选中的比赛信息 -->
             <div class="selected-contest" id="selectedContest">
               <div class="selected-contest-header">
                 <div class="selected-contest-info">
@@ -825,47 +778,20 @@ document.addEventListener('DOMContentLoaded', function() {
 async function loadContests() {
   try {
     // 使用从后端传递的比赛数据
-    contests = {{ contests | dump }} || [];
+    contests = {% if contests %}{{ contests | dump | safe }}{% else %}[]{% endif %};
   } catch (error) {
     console.error('Failed to load contests:', error);
     contests = [];
   }
 }
 
-// 比赛搜索
-document.getElementById('contestSearch').addEventListener('input', function(e) {
-  const query = e.target.value.toLowerCase();
-  const results = document.getElementById('searchResults');
-  
-  if (query.length < 2) {
-    results.style.display = 'none';
+// 选择比赛
+function selectContest(contestId) {
+  if (!contestId) {
+    removeSelectedContest();
     return;
   }
   
-  const filtered = contests.filter(contest => 
-    contest.title.toLowerCase().includes(query) || 
-    contest.id.toLowerCase().includes(query)
-  );
-  
-  if (filtered.length > 0) {
-    results.innerHTML = filtered.map(contest => `
-      <div class="search-result-item" onclick="selectContest('${contest.id}')">
-        <div class="contest-result-title">${contest.title}</div>
-        <div class="contest-result-meta">
-          ID: ${contest.id} | ${contest.total_problems} 题目 | 
-          ${contest.begin_at} - ${contest.end_at}
-        </div>
-      </div>
-    `).join('');
-    results.style.display = 'block';
-  } else {
-    results.innerHTML = '<div class="search-result-item">未找到匹配的比赛</div>';
-    results.style.display = 'block';
-  }
-});
-
-// 选择比赛
-function selectContest(contestId) {
   const contest = contests.find(c => c.id === contestId);
   if (!contest) return;
   
@@ -874,12 +800,8 @@ function selectContest(contestId) {
   // 显示选中的比赛
   document.getElementById('selectedContestTitle').textContent = contest.title;
   document.getElementById('selectedContestMeta').textContent = 
-    `ID: ${contest.id} | ${contest.total_problems} 题目 | ${contest.begin_at} - ${contest.end_at}`;
+    `ID: ${contest.id} | 开始时间: ${contest.begin_at || '未知'}`;
   document.getElementById('selectedContest').classList.add('show');
-  
-  // 隐藏搜索结果
-  document.getElementById('searchResults').style.display = 'none';
-  document.getElementById('contestSearch').value = contest.title;
   
   // 清除错误信息
   hideError('contestError');
@@ -895,7 +817,7 @@ function removeSelectedContest() {
   selectedContestId = null;
   selectedProblems = [];
   document.getElementById('selectedContest').classList.remove('show');
-  document.getElementById('contestSearch').value = '';
+  document.getElementById('contestSelector').value = '';
   document.getElementById('problemsGrid').innerHTML = 
     '<div style="text-align: center; color: #6b7280; padding: 40px;">请先选择比赛</div>';
   updateSummary();

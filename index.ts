@@ -626,14 +626,15 @@ class NewPlagiarismTaskHandler extends Handler {
             // 从document集合中查询所有比赛
             const contestDocs = await db.collection('document').find({
                 docType: 30 // 30 是比赛文档类型
-            }).sort({ _id: -1 }).limit(100).toArray(); // 获取最近100个比赛
+            }).sort({ beginAt: -1 }).limit(100).toArray(); // 按开始时间倒序，获取最近100个比赛
             
             return contestDocs.map(doc => ({
-                id: doc.docId.toString(), // 转换为字符串
-                title: doc.title || `比赛 ${doc.docId}`,
+                id: doc._id.toString(), // 使用_id作为交换标识
+                title: doc.title || `比赛 ${doc._id}`,
                 begin_at: doc.beginAt ? new Date(doc.beginAt) : null,
                 end_at: doc.endAt ? new Date(doc.endAt) : null,
                 owner: doc.owner || 0,
+                attend: doc.attend || 0,
                 status: this.getContestStatus(doc)
             }));
         } catch (error) {
