@@ -452,7 +452,7 @@
       系统正在对提交的代码进行深度分析，检测潜在的抄袭行为
     </div>
     <div class="estimated-time">
-      ⏱️ 预计处理时间：{{ estimated_time || '30-60分钟' }}
+      ⏱️ 预计处理时间：{{ estimated_time if estimated_time else '30-60分钟' }}
     </div>
   </div>
 
