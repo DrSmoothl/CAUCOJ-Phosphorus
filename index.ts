@@ -705,33 +705,60 @@ class ProblemPlagiarismDetailHandler extends Handler {
     private async findContestById(contestId: string): Promise<any | null> {
         try {
             const db = (global as any).Hydro.service.db;
-            const contestDoc = await db.collection('document').findOne({
-                _id: new (global as any).Hydro.lib.ObjectId(contestId),
-                docType: 30 // CONTEST
-            });
+            const documentColl = db.collection('document');
+            let contest: any = null;
             
-            if (!contestDoc) {
+            // 尝试多种查询方式（参照其他插件的做法）
+            try {
+                // 方式1: 直接查询
+                contest = await documentColl.findOne({ 
+                    _id: contestId,
+                    docType: 30 // 比赛文档类型
+                });
+            } catch (error) {
+                // 查询失败，继续尝试其他方式
+                console.log(`[Phosphorus] Direct query failed for contest ${contestId}, trying alternative methods`);
+            }
+            
+            // 方式2: 如果直接查询失败，尝试字符串匹配
+            if (!contest) {
+                try {
+                    const allContests = await documentColl.find({ docType: 30 }).toArray();
+                    
+                    // 尝试字符串匹配
+                    contest = allContests.find((c: any) => {
+                        return c._id.toString() === contestId.toString();
+                    }) || null;
+                } catch (error) {
+                    console.error(`[Phosphorus] Alternative query also failed for contest ${contestId}:`, error);
+                }
+            }
+            
+            if (!contest) {
+                console.log(`[Phosphorus] Contest not found with string ID: ${contestId}`);
                 return null;
             }
             
+            console.log(`[Phosphorus] Found contest: ${contest.title || contest._id}`);
+            
             return {
-                id: contestDoc._id.toString(),
-                title: contestDoc.title || `比赛 ${contestDoc._id}`,
-                begin_at: contestDoc.beginAt ? new Date(contestDoc.beginAt).toLocaleString('zh-CN', {
+                id: contest._id.toString(),
+                title: contest.title || `比赛 ${contest._id}`,
+                begin_at: contest.beginAt ? new Date(contest.beginAt).toLocaleString('zh-CN', {
                     year: 'numeric',
                     month: '2-digit', 
                     day: '2-digit',
                     hour: '2-digit',
                     minute: '2-digit'
                 }) : null,
-                end_at: contestDoc.endAt ? new Date(contestDoc.endAt).toLocaleString('zh-CN', {
+                end_at: contest.endAt ? new Date(contest.endAt).toLocaleString('zh-CN', {
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit', 
                     hour: '2-digit',
                     minute: '2-digit'
                 }) : null,
-                status: this.getContestStatus(contestDoc)
+                status: this.getContestStatus(contest)
             };
         } catch (error) {
             console.error('Failed to get contest by ID:', error);
