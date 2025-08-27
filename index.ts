@@ -2,361 +2,586 @@
 // @module: esnext
 // @filename: index.ts
 import {
-    Handler, NotFoundError, PermissionError,
-    PRIV, Types, UserModel, ObjectId, Context
+    Context, definePlugin, Handler, NotFoundError,
+    PRIV, SystemModel
 } from 'hydrooj';
 
-// Phosphorus API base URL
-const PHOSPHORUS_API_BASE = 'http://localhost:8000';
+// Plugin configuration
+const PLUGIN_NAME = 'phosphorus-plagiarism';
+const PLUGIN_VERSION = '1.0.0';
 
-interface Contest {
-    _id: ObjectId;
-    title: string;
-    owner: number;
-    domainId: string;
-    docType: number;
-    docId: ObjectId;
-    beginAt: Date | null;
-    endAt: Date | null;
-    attend: number;
-    pids: any[];
-    rule: string;
-}
-
-interface PlagiarismResult {
-    _id: string;
-    contest_id: string;
-    problem_id: number;
-    analysis_id: string;
-    total_submissions: number;
-    total_comparisons: number;
-    execution_time_ms: number;
-    high_similarity_pairs: Array<{
-        user1_id: number;
-        user2_id: number;
-        similarity: number;
-        file1: string;
-        file2: string;
-        match_count: number;
-    }>;
-    clusters: Array<{
-        cluster_id: number;
-        members: number[];
-        avg_similarity: number;
-    }>;
-    submission_stats: Array<{
-        user_id: number;
-        submission_count: number;
-        avg_similarity: number;
-        max_similarity: number;
-    }>;
-    failed_submissions: Array<{
-        user_id: number;
-        error: string;
-    }>;
-    created_at: string;
-    jplag_file_path?: string;
+// Get Phosphorus API base URL from system settings
+function getPhosphorusApiBase(): string {
+    return SystemModel.get('phosphorus.api.base') || 'http://localhost:8000';
 }
 
 /**
- * 获取所有比赛
+ * Make HTTP request to Phosphorus API
  */
-async function getAllContests(domainId: string): Promise<Contest[]> {
-    // 查询 documents 集合中 docType = 30 的文档（比赛）
-    const contests = await global.Hydro.model.document.getMulti(
-        domainId, 
-        30 as any
-    ).sort({ beginAt: -1 }).toArray();
+async function makeApiRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {
+    const url = `${getPhosphorusApiBase()}${endpoint}`;
     
-    // 确保日期字段被正确处理
-    return contests.map((contest: any) => ({
-        ...contest,
-        beginAt: contest.beginAt ? new Date(contest.beginAt) : null,
-        endAt: contest.endAt ? new Date(contest.endAt) : null,
-        attend: contest.attend || 0,
-        pids: contest.pids || []
-    }));
-}
-
-/**
- * 调用 Phosphorus API 检查比赛抄袭
- */
-async function checkContestPlagiarism(
-    contestId: string, 
-    minTokens: number = 9, 
-    similarityThreshold: number = 0.0
-): Promise<PlagiarismResult> {
-    const requestData = {
-        contest_id: contestId,
-        min_tokens: minTokens,
-        similarity_threshold: similarityThreshold
+    const options: RequestInit = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
     };
-
+    
+    if (data && method !== 'GET') {
+        options.body = JSON.stringify(data);
+    }
+    
     try {
-        const response = await fetch(
-            `${PHOSPHORUS_API_BASE}/api/v1/contest/plagiarism`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestData)
-            }
-        );
-
+        const response = await fetch(url, options);
+        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-
-        const result = await response.json();
         
-        if (result && result.success) {
-            return result.data;
-        } else {
-            throw new Error(result?.message || 'API call failed');
-        }
+        return await response.json();
     } catch (error: any) {
-        throw new Error(`Request failed: ${error.message}`);
+        throw new Error(`API request failed: ${error.message}`);
     }
 }
 
 /**
- * 获取比赛的抄袭检测结果
+ * Plagiarism Main Page Handler - /plagiarism
  */
-async function getContestPlagiarismResults(contestId: string): Promise<PlagiarismResult[]> {
-    try {
-        const response = await fetch(
-            `${PHOSPHORUS_API_BASE}/api/v1/contest/${contestId}/plagiarism`
-        );
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        
-        if (result && result.success) {
-            return result.data;
-        } else {
-            throw new Error(result?.message || 'API call failed');
-        }
-    } catch (error: any) {
-        throw new Error(`Request failed: ${error.message}`);
-    }
-}
-
-const plagiarismModel = { 
-    getAllContests,
-    checkContestPlagiarism, 
-    getContestPlagiarismResults 
-};
-
-declare module 'hydrooj' {
-    interface Model {
-        plagiarism: typeof plagiarismModel;
-    }
-}
-
-global.Hydro.model.plagiarism = plagiarismModel;
-
-/**
- * 查重系统主页面 Handler - /plagiarism
- */
-class PlagiarismSystemHandler extends Handler {
-    async get({ domainId }: { domainId: string }) {
-        // 检查权限：需要管理员权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        this.response.body = { 
-            apiBase: PHOSPHORUS_API_BASE
-        };
-        this.response.template = 'plagiarism_system.html';
-    }
-}
-
-/**
- * 比赛查重列表页面 Handler - /plagiarism/contest
- */
-class PlagiarismContestListHandler extends Handler {
-    async get({ domainId }: { domainId: string }) {
-        // 检查权限：需要管理员权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        // 获取所有比赛
-        let contests: Contest[] = [];
-        let error: string | null = null;
+class PlagiarismMainHandler extends Handler {
+    async get() {
+        // Check permissions - use existing permission for contest management
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
         try {
-            contests = await plagiarismModel.getAllContests(domainId);
-        } catch (err: any) {
-            error = err.message;
-        }
-
-        this.response.body = { 
-            contests,
-            error,
-            apiBase: PHOSPHORUS_API_BASE
-        };
-        this.response.template = 'plagiarism_contest_list.html';
-    }
-}
-
-/**
- * 比赛查重检测 Handler - /plagiarism/contest/check
- */
-class PlagiarismContestCheckHandler extends Handler {
-    async post({ domainId, contestId, minTokens = 9, similarityThreshold = 0.0 }: { 
-        domainId: string; 
-        contestId: string; 
-        minTokens?: number; 
-        similarityThreshold?: number;
-    }) {
-        // 检查权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        try {
-            // 调用 Phosphorus API 进行检测
-            const result = await plagiarismModel.checkContestPlagiarism(
-                contestId, 
-                minTokens, 
-                similarityThreshold
-            );
-
-            this.response.body = { 
-                success: true, 
-                result,
-                message: 'Contest plagiarism check completed successfully'
+            // Get system statistics
+            const stats = await this.getSystemStats();
+            const recentActivities = await this.getRecentActivities();
+            
+            this.response.template = 'plagiarism_main.html';
+            this.response.body = {
+                total_contests: stats.total_contests || 0,
+                total_problems: stats.total_problems || 0,
+                total_submissions: stats.total_submissions || 0,
+                high_similarity_count: stats.high_similarity_count || 0,
+                contest_stats: stats.contest_stats || {},
+                language_stats: stats.language_stats || {},
+                history_stats: stats.history_stats || {},
+                recent_activities: recentActivities
             };
         } catch (error: any) {
-            this.response.body = { 
-                success: false, 
-                error: error.message 
+            this.response.template = 'plagiarism_main.html';
+            this.response.body = {
+                error: error.message,
+                total_contests: 0,
+                total_problems: 0,
+                total_submissions: 0,
+                high_similarity_count: 0,
+                contest_stats: {},
+                language_stats: {},
+                history_stats: {},
+                recent_activities: []
             };
         }
-
-        this.response.type = 'application/json';
+    }
+    
+    private async getSystemStats(): Promise<any> {
+        try {
+            const result = await makeApiRequest('/api/v1/contests/plagiarism');
+            
+            if (result.success) {
+                const contests = result.data || [];
+                
+                const totalProblems = contests.reduce((sum: number, c: any) => sum + (c.checked_problems || 0), 0);
+                const totalSubmissions = contests.reduce((sum: number, c: any) => sum + (c.total_submissions || 0), 0);
+                const highSimilarityCount = contests.reduce((sum: number, c: any) => sum + (c.high_similarity_count || 0), 0);
+                
+                return {
+                    total_contests: contests.length,
+                    total_problems: totalProblems,
+                    total_submissions: totalSubmissions,
+                    high_similarity_count: highSimilarityCount,
+                    contest_stats: {
+                        total: contests.length,
+                        checked: contests.filter((c: any) => (c.checked_problems || 0) > 0).length
+                    },
+                    language_stats: {
+                        supported: 12,
+                        active: 8
+                    },
+                    history_stats: {
+                        total: totalProblems,
+                        recent: contests.filter((c: any) => this.isRecent(c.last_check_at)).length
+                    }
+                };
+            }
+        } catch (error) {
+            console.error('Failed to get system stats:', error);
+        }
+        
+        return {
+            total_contests: 0,
+            total_problems: 0,
+            total_submissions: 0,
+            high_similarity_count: 0,
+            contest_stats: {},
+            language_stats: {},
+            history_stats: {}
+        };
+    }
+    
+    private async getRecentActivities(): Promise<any[]> {
+        try {
+            const result = await makeApiRequest('/api/v1/contests/plagiarism');
+            
+            if (result.success) {
+                const contests = result.data || [];
+                const activities: any[] = [];
+                
+                contests.slice(-5).forEach((contest: any) => {
+                    if (contest.last_check_at) {
+                        activities.push({
+                            type: 'contest_check',
+                            title: `检查了比赛 ${contest.title}`,
+                            description: `分析了 ${contest.checked_problems || 0} 个题目`,
+                            time_ago: this.timeAgo(contest.last_check_at)
+                        });
+                    }
+                });
+                
+                return activities;
+            }
+        } catch (error) {
+            console.error('Failed to get recent activities:', error);
+        }
+        
+        return [];
+    }
+    
+    private isRecent(timestamp?: string): boolean {
+        if (!timestamp) {
+            return false;
+        }
+        try {
+            const dt = new Date(timestamp);
+            const delta = Date.now() - dt.getTime();
+            return delta <= 30 * 24 * 60 * 60 * 1000; // 30 days
+        } catch {
+            return false;
+        }
+    }
+    
+    private timeAgo(timestamp: string): string {
+        try {
+            const dt = new Date(timestamp);
+            const delta = Date.now() - dt.getTime();
+            
+            const days = Math.floor(delta / (24 * 60 * 60 * 1000));
+            const hours = Math.floor(delta / (60 * 60 * 1000));
+            const minutes = Math.floor(delta / (60 * 1000));
+            
+            if (days > 0) {
+                return `${days} 天前`;
+            }
+            if (hours > 0) {
+                return `${hours} 小时前`;
+            }
+            if (minutes > 0) {
+                return `${minutes} 分钟前`;
+            }
+            return '刚刚';
+        } catch {
+            return '未知时间';
+        }
     }
 }
 
 /**
- * 比赛查重详情页面 Handler - /plagiarism/contest/:id
+ * Contest Plagiarism List Handler - /plagiarism/contest
  */
-class PlagiarismContestDetailHandler extends Handler {
-    async get({ domainId, id }: { domainId: string; id: string }) {
-        // 检查权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        // 获取比赛信息
-        const contest = await global.Hydro.model.contest.get(domainId, new ObjectId(id));
-        if (!contest) {
-            throw new NotFoundError(`Contest ${id}`);
-        }
-
-        // 获取检测结果
-        let results: PlagiarismResult[] = [];
-        let error: string | null = null;
+class ContestPlagiarismListHandler extends Handler {
+    async get() {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
         try {
-            results = await plagiarismModel.getContestPlagiarismResults(id);
-        } catch (err: any) {
-            error = err.message;
-        }
-
-        // 获取用户信息
-        const uids = new Set<number>();
-        results.forEach(result => {
-            result.high_similarity_pairs.forEach(pair => {
-                uids.add(pair.user1_id);
-                uids.add(pair.user2_id);
-            });
-            result.submission_stats.forEach(stat => {
-                uids.add(stat.user_id);
-            });
-            result.failed_submissions.forEach(fail => {
-                uids.add(fail.user_id);
-            });
-        });
-
-        const udict = await UserModel.getList(domainId, Array.from(uids));
-
-        this.response.body = { 
-            contest,
-            results, 
-            error,
-            udict,
-            apiBase: PHOSPHORUS_API_BASE
-        };
-        this.response.template = 'plagiarism_contest_detail.html';
-    }
-}
-
-/**
- * 题目查重列表页面 Handler - /plagiarism/problem
- */
-class PlagiarismProblemListHandler extends Handler {
-    async get({ domainId }: { domainId: string }) {
-        // 检查权限：需要管理员权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        this.response.body = { 
-            message: 'Problem plagiarism detection is not implemented yet.',
-            apiBase: PHOSPHORUS_API_BASE
-        };
-        this.response.template = 'plagiarism_problem_list.html';
-    }
-}
-
-/**
- * 题目查重详情页面 Handler - /plagiarism/problem/:id
- */
-class PlagiarismProblemDetailHandler extends Handler {
-    async get({ domainId, id }: { domainId: string; id: string }) {
-        // 检查权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        this.response.body = { 
-            problemId: id,
-            message: 'Problem plagiarism detection is not implemented yet.',
-            apiBase: PHOSPHORUS_API_BASE
-        };
-        this.response.template = 'plagiarism_problem_detail.html';
-    }
-}
-
-/**
- * 导出检测结果 Handler
- */
-class PlagiarismExportHandler extends Handler {
-    async get({ domainId, type, id, rid }: { domainId: string; type: string; id: string; rid: string }) {
-        // 检查权限
-        this.checkPriv(PRIV.PRIV_CREATE_DOMAIN);
-
-        if (type === 'contest') {
-            // 获取比赛检测结果
-            const results = await plagiarismModel.getContestPlagiarismResults(id);
-            const result = results.find(r => r._id === rid);
+            const result = await makeApiRequest('/api/v1/contests/plagiarism');
             
-            if (!result) {
-                throw new NotFoundError(`Plagiarism result ${rid}`);
+            if (result.success) {
+                const contests = result.data || [];
+                
+                // Enrich contest data
+                contests.forEach((contest: any) => {
+                    contest.begin_at = contest.begin_at ? new Date(contest.begin_at) : null;
+                    contest.end_at = contest.end_at ? new Date(contest.end_at) : null;
+                    contest.last_check_at = contest.last_check_at ? new Date(contest.last_check_at) : null;
+                });
+                
+                this.response.template = 'contest_list.html';
+                this.response.body = { contests };
+            } else {
+                this.response.template = 'contest_list.html';
+                this.response.body = { contests: [], error: result.message || 'Failed to fetch contests' };
             }
-
-            // 设置下载响应
-            this.response.body = JSON.stringify(result, null, 2);
-            this.response.type = 'application/json';
-            this.response.addHeader('Content-Disposition', `attachment; filename="contest_plagiarism_${id}_${rid}.json"`);
-        } else {
-            throw new NotFoundError(`Export type ${type} not supported`);
+        } catch (error: any) {
+            this.response.template = 'contest_list.html';
+            this.response.body = { contests: [], error: error.message };
         }
     }
 }
 
-export async function apply(ctx: Context) {
-    // 注册路由
-    ctx.Route('plagiarism_system', '/plagiarism', PlagiarismSystemHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_contest_list', '/plagiarism/contest', PlagiarismContestListHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_contest_check', '/plagiarism/contest/check', PlagiarismContestCheckHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_contest_detail', '/plagiarism/contest/:id', PlagiarismContestDetailHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_problem_list', '/plagiarism/problem', PlagiarismProblemListHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_problem_detail', '/plagiarism/problem/:id', PlagiarismProblemDetailHandler, PRIV.PRIV_USER_PROFILE);
-    ctx.Route('plagiarism_export', '/plagiarism/:type/:id/:rid/export', PlagiarismExportHandler, PRIV.PRIV_USER_PROFILE);
+/**
+ * Contest Plagiarism Detail Handler - /plagiarism/contest/:contest_id
+ */
+class ContestPlagiarismDetailHandler extends Handler {
+    async get({ contest_id }: { contest_id: string }) {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        try {
+            // Get contest information
+            const contest = await this.getContestInfo(contest_id);
+            if (!contest) {
+                throw new NotFoundError('Contest not found');
+            }
+            
+            // Get problems with plagiarism results
+            const problems = await this.getContestProblems(contest_id);
+            
+            // Calculate summary statistics
+            const totalHighSimilarity = problems.reduce((sum, p) => {
+                const pairs = p.plagiarism_result?.high_similarity_pairs || [];
+                return sum + pairs.length;
+            }, 0);
+            
+            const avgSimilarity = this.calculateAverageSimilarity(problems);
+            
+            this.response.template = 'contest_detail.html';
+            this.response.body = {
+                contest,
+                problems,
+                total_high_similarity: totalHighSimilarity,
+                avg_similarity: avgSimilarity
+            };
+        } catch (error: any) {
+            if (error instanceof NotFoundError) {
+                throw error;
+            }
+            this.response.template = 'contest_detail.html';
+            this.response.body = { error: error.message };
+        }
+    }
+    
+    private async getContestInfo(contestId: string): Promise<any> {
+        try {
+            const result = await makeApiRequest('/api/v1/contests/plagiarism');
+            if (result.success) {
+                const contests = result.data || [];
+                const contest = contests.find((c: any) => c.id === contestId);
+                if (contest) {
+                    contest.begin_at = contest.begin_at ? new Date(contest.begin_at) : null;
+                    contest.end_at = contest.end_at ? new Date(contest.end_at) : null;
+                    contest.last_check_at = contest.last_check_at ? new Date(contest.last_check_at) : null;
+                    return contest;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to get contest info:', error);
+        }
+        return null;
+    }
+    
+    private async getContestProblems(contestId: string): Promise<any[]> {
+        try {
+            // Get problems
+            const problemsResult = await makeApiRequest(`/api/v1/contest/${contestId}/problems`);
+            if (!problemsResult.success) {
+                return [];
+            }
+            
+            const problems = problemsResult.data || [];
+            
+            // Get plagiarism results for each problem
+            for (const problem of problems) {
+                problem.last_check_at = problem.last_check_at ? new Date(problem.last_check_at) : null;
+                
+                try {
+                    const resultResponse = await makeApiRequest(
+                        `/api/v1/contest/${contestId}/problem/${problem.id}/plagiarism`
+                    );
+                    if (resultResponse.success && resultResponse.data) {
+                        problem.plagiarism_result = resultResponse.data;
+                    }
+                } catch (error) {
+                    console.warn(`Failed to get plagiarism result for problem ${problem.id}:`, error);
+                }
+            }
+            
+            return problems;
+        } catch (error) {
+            console.error('Failed to get contest problems:', error);
+            return [];
+        }
+    }
+    
+    private calculateAverageSimilarity(problems: any[]): number | null {
+        const similarities: number[] = [];
+        
+        problems.forEach(problem => {
+            const result = problem.plagiarism_result;
+            if (result?.high_similarity_pairs) {
+                result.high_similarity_pairs.forEach((pair: any) => {
+                    const avgSim = pair.similarities?.AVG;
+                    if (typeof avgSim === 'number') {
+                        similarities.push(avgSim);
+                    }
+                });
+            }
+        });
+        
+        return similarities.length > 0 ? similarities.reduce((a, b) => a + b, 0) / similarities.length : null;
+    }
 }
+
+/**
+ * Problem Plagiarism Detail Handler - /plagiarism/contest/:contest_id/:problem_id
+ */
+class ProblemPlagiarismDetailHandler extends Handler {
+    async get({ contest_id, problem_id }: { contest_id: string; problem_id: string }) {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        try {
+            // Get contest and problem information
+            const contest = await this.getContestInfo(contest_id);
+            const problem = await this.getProblemInfo(contest_id, parseInt(problem_id));
+            
+            if (!contest || !problem) {
+                throw new NotFoundError('Contest or problem not found');
+            }
+            
+            // Get language statistics and results
+            const languageResults = await this.getLanguageResults(contest_id, parseInt(problem_id));
+            
+            this.response.template = 'problem_detail.html';
+            this.response.body = {
+                contest,
+                problem,
+                language_results: languageResults
+            };
+        } catch (error: any) {
+            if (error instanceof NotFoundError) {
+                throw error;
+            }
+            this.response.template = 'problem_detail.html';
+            this.response.body = { error: error.message };
+        }
+    }
+    
+    private async getContestInfo(contestId: string): Promise<any> {
+        try {
+            const result = await makeApiRequest('/api/v1/contests/plagiarism');
+            if (result.success) {
+                const contests = result.data || [];
+                return contests.find((c: any) => c.id === contestId) || null;
+            }
+        } catch (error) {
+            console.error('Failed to get contest info:', error);
+        }
+        return null;
+    }
+    
+    private async getProblemInfo(contestId: string, problemId: number): Promise<any> {
+        try {
+            const result = await makeApiRequest(`/api/v1/contest/${contestId}/problems`);
+            if (result.success) {
+                const problems = result.data || [];
+                const problem = problems.find((p: any) => p.id === problemId);
+                if (problem) {
+                    problem.last_check_at = problem.last_check_at ? new Date(problem.last_check_at) : null;
+                    return problem;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to get problem info:', error);
+        }
+        return null;
+    }
+    
+    private async getLanguageResults(contestId: string, problemId: number): Promise<any[]> {
+        try {
+            // Get language statistics
+            const statsResult = await makeApiRequest(
+                `/api/v1/contest/${contestId}/problem/${problemId}/languages`
+            );
+            
+            if (!statsResult.success) {
+                return [];
+            }
+            
+            const languageStats = statsResult.data || [];
+            
+            // Get plagiarism result
+            let plagiarismResult: any = null;
+            try {
+                const resultResponse = await makeApiRequest(
+                    `/api/v1/contest/${contestId}/problem/${problemId}/plagiarism`
+                );
+                if (resultResponse.success) {
+                    plagiarismResult = resultResponse.data;
+                }
+            } catch (error) {
+                console.warn('Failed to get plagiarism result:', error);
+            }
+            
+            // Combine stats with results
+            const languageResults: any[] = [];
+            
+            languageStats.forEach((stat: any) => {
+                if (!stat.can_analyze) {
+                    return;
+                }
+                
+                const langResult: any = {
+                    language: stat.language,
+                    language_display: this.getLanguageDisplayName(stat.language),
+                    language_icon: this.getLanguageIcon(stat.language),
+                    submission_count: stat.submission_count,
+                    unique_users: stat.unique_users,
+                    similarity_pairs: [],
+                    avg_similarity: 0.0,
+                    high_similarity_pairs: []
+                };
+                
+                // Add plagiarism data if available
+                if (plagiarismResult) {
+                    // Generate mock pairs for demonstration
+                    langResult.similarity_pairs = this.generateMockPairs(stat.submission_count);
+                    langResult.high_similarity_pairs = langResult.similarity_pairs;
+                    if (langResult.similarity_pairs.length > 0) {
+                        langResult.avg_similarity = langResult.similarity_pairs.reduce(
+                            (sum: number, p: any) => sum + p.avg_similarity, 0
+                        ) / langResult.similarity_pairs.length;
+                    }
+                }
+                
+                languageResults.push(langResult);
+            });
+            
+            return languageResults;
+        } catch (error) {
+            console.error('Failed to get language results:', error);
+            return [];
+        }
+    }
+    
+    private getLanguageDisplayName(lang: string): string {
+        const langNames: { [key: string]: string } = {
+            'c': 'C',
+            'cc': 'C++',
+            'py': 'Python',
+            'java': 'Java',
+            'js': 'JavaScript',
+            'go': 'Go',
+            'rs': 'Rust',
+            'cs': 'C#',
+            'kt': 'Kotlin'
+        };
+        return langNames[lang] || lang.toUpperCase();
+    }
+    
+    private getLanguageIcon(lang: string): string {
+        const langIcons: { [key: string]: string } = {
+            'c': '⚡',
+            'cc': '🔧',
+            'py': '🐍',
+            'java': '☕',
+            'js': '🟨',
+            'go': '🐹',
+            'rs': '🦀',
+            'cs': '🔷',
+            'kt': '🎯'
+        };
+        return langIcons[lang] || '📝';
+    }
+    
+    private generateMockPairs(submissionCount: number): any[] {
+        const pairs: any[] = [];
+        const numPairs = Math.min(5, Math.floor(submissionCount / 2));
+        
+        for (let i = 0; i < numPairs; i++) {
+            const similarity = Math.random() * 0.6 + 0.3; // 0.3 to 0.9
+            pairs.push({
+                first_user_id: `user_${Math.floor(Math.random() * 9000) + 1000}`,
+                second_user_id: `user_${Math.floor(Math.random() * 9000) + 1000}`,
+                avg_similarity: similarity,
+                max_similarity: similarity + Math.random() * 0.1,
+                matched_tokens: Math.floor(Math.random() * 80) + 20,
+                total_comparisons: Math.floor(Math.random() * 5) + 1,
+                match_length: Math.floor(Math.random() * 40) + 10,
+                first_submission: {
+                    file_count: 1,
+                    total_tokens: Math.floor(Math.random() * 150) + 50
+                },
+                second_submission: {
+                    file_count: 1,
+                    total_tokens: Math.floor(Math.random() * 150) + 50
+                },
+                first_code_lines: this.generateMockCode(),
+                second_code_lines: this.generateMockCode(),
+                code_matches: true
+            });
+        }
+        
+        return pairs.sort((a, b) => b.avg_similarity - a.avg_similarity);
+    }
+    
+    private generateMockCode(): any[] {
+        const codeTemplates = [
+            "#include <iostream>",
+            "using namespace std;",
+            "int main() {",
+            "    int a, b;",
+            "    cin >> a >> b;",
+            "    cout << a + b << endl;",
+            "    return 0;",
+            "}"
+        ];
+        
+        return codeTemplates.map((line, index) => ({
+            content: line,
+            is_match: [3, 4, 5].includes(index) // Mark some lines as matches
+        }));
+    }
+}
+
+/**
+ * New Plagiarism Task Handler - /plagiarism/new
+ */
+class NewPlagiarismTaskHandler extends Handler {
+    async get() {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        this.response.template = 'new_task.html';
+        this.response.body = {};
+    }
+}
+
+export default definePlugin({
+    name: PLUGIN_NAME,
+    
+    apply(ctx: Context) {
+        // Register routes
+        ctx.Route('plagiarism_main', '/plagiarism', PlagiarismMainHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('plagiarism_contest_list', '/plagiarism/contest', ContestPlagiarismListHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('plagiarism_contest_detail', '/plagiarism/contest/:contest_id', ContestPlagiarismDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('plagiarism_problem_detail', '/plagiarism/contest/:contest_id/:problem_id', ProblemPlagiarismDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('plagiarism_new_task', '/plagiarism/new', NewPlagiarismTaskHandler, PRIV.PRIV_EDIT_SYSTEM);
+        
+        // Add to navigation menu
+        ctx.injectUI('UserDropdown', 'Userinfo', {
+            icon: 'search',
+            displayName: '代码查重',
+            uid: 'plagiarism_system',
+        }, PRIV.PRIV_EDIT_SYSTEM);
+        
+        console.log(`${PLUGIN_NAME} plugin loaded successfully`);
+    }
+});

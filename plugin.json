@@ -1,0 +1,70 @@
+{
+    "name": "phosphorus-plagiarism",
+    "version": "1.0.0",
+    "description": "JPlag-based code plagiarism detection for contests",
+    "author": "Phosphorus Team",
+    "license": "MIT",
+    "main": "handler.py",
+    "templates": [
+        "plagiarism_main.html",
+        "contest_list.html", 
+        "contest_detail.html",
+        "problem_detail.html",
+        "new_task.html"
+    ],
+    "routes": [
+        {
+            "path": "/plagiarism",
+            "handler": "PlagiarismMainHandler",
+            "method": "GET",
+            "name": "plagiarism_main"
+        },
+        {
+            "path": "/plagiarism/contest",
+            "handler": "ContestPlagiarismListHandler", 
+            "method": "GET",
+            "name": "plagiarism_contest_list"
+        },
+        {
+            "path": "/plagiarism/contest/{contest_id}",
+            "handler": "ContestPlagiarismDetailHandler",
+            "method": "GET", 
+            "name": "plagiarism_contest_detail"
+        },
+        {
+            "path": "/plagiarism/contest/{contest_id}/{problem_id}",
+            "handler": "ProblemPlagiarismDetailHandler",
+            "method": "GET",
+            "name": "plagiarism_problem_detail"
+        },
+        {
+            "path": "/plagiarism/new",
+            "handler": "NewPlagiarismTaskHandler",
+            "method": "GET",
+            "name": "plagiarism_new_task"
+        }
+    ],
+    "dependencies": {
+        "httpx": ">=0.24.0",
+        "jinja2": ">=3.0.0"
+    },
+    "config": {
+        "phosphorus_api_base": {
+            "type": "string",
+            "default": "http://localhost:8000",
+            "description": "Base URL for Phosphorus API server"
+        }
+    },
+    "permissions": [
+        "PRIV_EDIT_CONTEST"
+    ],
+    "menu_items": [
+        {
+            "title": "代码查重",
+            "url": "/plagiarism",
+            "icon": "fas fa-search-plus",
+            "permission": "PRIV_EDIT_CONTEST",
+            "order": 100
+        }
+    ]
+}

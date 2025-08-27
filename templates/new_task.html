@@ -1,0 +1,1273 @@
+{% extends "layout/basic.html" %}
+{% block title %}新建查重任务{% endblock %}
+
+{% block content %}
+<style>
+/* 新建查重任务页面样式 */
+.new-task-container {
+  max-width: 1000px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+.page-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px 30px;
+  border-radius: 16px;
+  margin-bottom: 30px;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 30px,
+    rgba(255,255,255,0.1) 30px,
+    rgba(255,255,255,0.1) 60px
+  );
+  animation: headerAnimation 12s linear infinite;
+}
+
+@keyframes headerAnimation {
+  0% { transform: translateX(-100px) translateY(-100px) rotate(0deg); }
+  100% { transform: translateX(100px) translateY(100px) rotate(360deg); }
+}
+
+.header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.page-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-description {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 0;
+}
+
+/* 步骤指示器 */
+.step-indicator {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transition: all 0.3s ease;
+}
+
+.step.active .step-number {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+}
+
+.step.completed .step-number {
+  background: #10b981;
+  color: white;
+}
+
+.step-title {
+  font-weight: 600;
+  color: #374151;
+  transition: all 0.3s ease;
+}
+
+.step.active .step-title {
+  color: #4facfe;
+}
+
+.step.completed .step-title {
+  color: #10b981;
+}
+
+.step-connector {
+  position: absolute;
+  top: 20px;
+  right: -40px;
+  width: 40px;
+  height: 2px;
+  background: #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.step.completed .step-connector {
+  background: #10b981;
+}
+
+/* 表单容器 */
+.form-container {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.form-header {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  padding: 20px 24px;
+}
+
+.form-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.form-body {
+  padding: 30px;
+}
+
+/* 表单步骤 */
+.form-step {
+  display: none;
+}
+
+.form-step.active {
+  display: block;
+}
+
+/* 表单组 */
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  display: block;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+  font-size: 1rem;
+}
+
+.form-label .required {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+.form-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4facfe;
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+.form-input.error {
+  border-color: #ef4444;
+}
+
+.form-select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #4facfe;
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+/* 比赛搜索 */
+.contest-search {
+  position: relative;
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  display: none;
+}
+
+.search-result-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.2s ease;
+}
+
+.search-result-item:hover {
+  background: #f8fafc;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.contest-result-title {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.contest-result-meta {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* 选中的比赛 */
+.selected-contest {
+  background: #f0f9ff;
+  border: 2px solid #4facfe;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
+  display: none;
+}
+
+.selected-contest.show {
+  display: block;
+}
+
+.selected-contest-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.selected-contest-info h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.selected-contest-meta {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.remove-contest {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.remove-contest:hover {
+  background: #fecaca;
+}
+
+/* 题目选择 */
+.problems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.problem-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.problem-card:hover {
+  border-color: #4facfe;
+}
+
+.problem-card.selected {
+  border-color: #4facfe;
+  background: #f0f9ff;
+}
+
+.problem-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.problem-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #4facfe;
+}
+
+.problem-title {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.95rem;
+  flex: 1;
+}
+
+.problem-stats {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.problem-languages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.language-tag {
+  padding: 2px 6px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* 选择操作 */
+.selection-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.select-btn {
+  padding: 8px 16px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.select-btn:hover {
+  background: #e5e7eb;
+}
+
+/* 参数配置 */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.config-card {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+  border: 2px solid #e5e7eb;
+}
+
+.config-card-title {
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-card-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.range-input {
+  width: 100%;
+  margin: 12px 0;
+}
+
+.range-value {
+  display: inline-block;
+  background: #4facfe;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* 表单导航 */
+.form-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 30px;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+}
+
+.nav-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-btn--primary {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+}
+
+.nav-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
+}
+
+.nav-btn--secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.nav-btn--secondary:hover {
+  background: #e5e7eb;
+}
+
+.nav-btn:disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 错误消息 */
+.error-message {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 0.875rem;
+  display: none;
+}
+
+.error-message.show {
+  display: block;
+}
+
+/* 加载状态 */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .new-task-container {
+    padding: 0 16px;
+  }
+  
+  .page-header {
+    padding: 30px 20px;
+  }
+  
+  .page-title {
+    font-size: 2rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .steps {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .step-connector {
+    display: none;
+  }
+  
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .problems-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-navigation {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* section重置 */
+.section {
+  background: transparent;
+  box-shadow: none;
+}
+
+.section__header {
+  display: none;
+}
+
+.section__body {
+  padding: 0;
+}
+</style>
+
+<div class="section">
+  <div class="section__body">
+    <div class="new-task-container">
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div class="header-content">
+          <h1 class="page-title">
+            <span>➕</span> 新建查重任务
+          </h1>
+          <p class="page-description">创建新的代码查重分析任务，支持多种编程语言和自定义参数</p>
+        </div>
+      </div>
+
+      <!-- 步骤指示器 -->
+      <div class="step-indicator">
+        <div class="steps">
+          <div class="step active" id="step-1">
+            <div class="step-number">1</div>
+            <div class="step-title">选择比赛</div>
+            <div class="step-connector"></div>
+          </div>
+          <div class="step" id="step-2">
+            <div class="step-number">2</div>
+            <div class="step-title">选择题目</div>
+            <div class="step-connector"></div>
+          </div>
+          <div class="step" id="step-3">
+            <div class="step-number">3</div>
+            <div class="step-title">配置参数</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 表单容器 -->
+      <div class="form-container">
+        <div class="form-header">
+          <h2 class="form-title">
+            <span id="form-icon">🏆</span>
+            <span id="form-title-text">选择要查重的比赛</span>
+          </h2>
+        </div>
+
+        <form id="plagiarismForm" class="form-body">
+          <!-- 步骤1: 选择比赛 -->
+          <div class="form-step active" id="form-step-1">
+            <div class="form-group">
+              <label class="form-label">
+                比赛搜索 <span class="required">*</span>
+              </label>
+              <div class="form-description">
+                搜索并选择要进行查重分析的比赛。输入比赛名称或ID进行搜索。
+              </div>
+              <div class="contest-search">
+                <input type="text" class="form-input" id="contestSearch" 
+                       placeholder="输入比赛名称或ID进行搜索..." 
+                       autocomplete="off">
+                <div class="search-results" id="searchResults"></div>
+              </div>
+              <div class="error-message" id="contestError"></div>
+            </div>
+
+            <!-- 选中的比赛 -->
+            <div class="selected-contest" id="selectedContest">
+              <div class="selected-contest-header">
+                <div class="selected-contest-info">
+                  <h4 id="selectedContestTitle"></h4>
+                  <div class="selected-contest-meta" id="selectedContestMeta"></div>
+                </div>
+                <button type="button" class="remove-contest" onclick="removeSelectedContest()">
+                  ✖ 移除
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 步骤2: 选择题目 -->
+          <div class="form-step" id="form-step-2">
+            <div class="form-group">
+              <label class="form-label">
+                题目选择 <span class="required">*</span>
+              </label>
+              <div class="form-description">
+                选择要进行查重分析的题目。建议选择通过提交数量较多的题目以获得更准确的分析结果。
+              </div>
+              
+              <div class="selection-actions">
+                <button type="button" class="select-btn" onclick="selectAllProblems()">全选</button>
+                <button type="button" class="select-btn" onclick="selectNoneProblems()">全不选</button>
+                <button type="button" class="select-btn" onclick="selectRecommendedProblems()">推荐题目</button>
+              </div>
+
+              <div class="problems-grid" id="problemsGrid">
+                <div style="text-align: center; color: #6b7280; padding: 40px;">
+                  请先选择比赛
+                </div>
+              </div>
+              <div class="error-message" id="problemsError"></div>
+            </div>
+          </div>
+
+          <!-- 步骤3: 配置参数 -->
+          <div class="form-step" id="form-step-3">
+            <div class="form-group">
+              <label class="form-label">查重参数配置</label>
+              <div class="form-description">
+                调整查重分析的参数设置。默认参数适用于大多数场景，您可以根据需要进行调整。
+              </div>
+              
+              <div class="config-grid">
+                <div class="config-card">
+                  <h4 class="config-card-title">
+                    <span>🎯</span> 最小Token匹配数
+                  </h4>
+                  <div class="config-card-description">
+                    设置判定为相似代码的最小Token数量。较小的值会检测到更多细微的相似性，但可能产生误报。
+                  </div>
+                  <input type="range" class="range-input" id="minTokens" 
+                         min="5" max="50" value="9" 
+                         oninput="updateRangeValue('minTokens', this.value)">
+                  <span>当前值: <span class="range-value" id="minTokensValue">9</span></span>
+                </div>
+
+                <div class="config-card">
+                  <h4 class="config-card-title">
+                    <span>📊</span> 相似度阈值
+                  </h4>
+                  <div class="config-card-description">
+                    设置报告高相似度的阈值（0-100%）。超过此阈值的代码对将被标记为高相似度。
+                  </div>
+                  <input type="range" class="range-input" id="similarityThreshold" 
+                         min="0" max="100" value="70" 
+                         oninput="updateRangeValue('similarityThreshold', this.value)">
+                  <span>当前值: <span class="range-value" id="similarityThresholdValue">70%</span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 任务摘要 -->
+            <div class="form-group">
+              <label class="form-label">任务摘要</label>
+              <div style="background: #f0f9ff; border: 2px solid #4facfe; border-radius: 12px; padding: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #1f2937;">
+                      <span id="summaryContest">-</span>
+                    </div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">选中比赛</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #1f2937;">
+                      <span id="summaryProblems">0</span>
+                    </div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">选中题目</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #1f2937;">
+                      <span id="summaryTokens">9</span>
+                    </div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">最小Token数</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #1f2937;">
+                      <span id="summaryThreshold">70%</span>
+                    </div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">相似度阈值</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- 表单导航 -->
+        <div class="form-navigation">
+          <button type="button" class="nav-btn nav-btn--secondary" id="prevBtn" onclick="previousStep()" disabled>
+            <span>‹</span> 上一步
+          </button>
+          <div id="stepInfo" style="color: #6b7280; font-size: 0.875rem;">
+            步骤 1 / 3
+          </div>
+          <button type="button" class="nav-btn nav-btn--primary" id="nextBtn" onclick="nextStep()">
+            下一步 <span>›</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 全局变量
+let currentStep = 1;
+let selectedContestId = null;
+let selectedProblems = [];
+let contests = [];
+let problems = [];
+
+// 初始化页面
+document.addEventListener('DOMContentLoaded', function() {
+  loadContests();
+  updateFormTitle();
+  updateSummary();
+});
+
+// 加载比赛列表
+async function loadContests() {
+  try {
+    // 这里应该调用实际的API
+    // const response = await fetch('/api/v1/contests');
+    // contests = await response.json();
+    
+    // 模拟数据
+    contests = [
+      {
+        id: '507f1f77bcf86cd799439011',
+        title: '2024年春季编程竞赛',
+        description: '面向大一学生的基础编程竞赛',
+        begin_at: '2024-03-01 09:00:00',
+        end_at: '2024-03-01 12:00:00',
+        total_problems: 5
+      },
+      {
+        id: '507f1f77bcf86cd799439012',
+        title: 'ACM算法竞赛选拔赛',
+        description: 'ACM-ICPC校队选拔',
+        begin_at: '2024-03-15 14:00:00',
+        end_at: '2024-03-15 17:00:00',
+        total_problems: 8
+      }
+    ];
+  } catch (error) {
+    console.error('Failed to load contests:', error);
+  }
+}
+
+// 比赛搜索
+document.getElementById('contestSearch').addEventListener('input', function(e) {
+  const query = e.target.value.toLowerCase();
+  const results = document.getElementById('searchResults');
+  
+  if (query.length < 2) {
+    results.style.display = 'none';
+    return;
+  }
+  
+  const filtered = contests.filter(contest => 
+    contest.title.toLowerCase().includes(query) || 
+    contest.id.toLowerCase().includes(query)
+  );
+  
+  if (filtered.length > 0) {
+    results.innerHTML = filtered.map(contest => `
+      <div class="search-result-item" onclick="selectContest('${contest.id}')">
+        <div class="contest-result-title">${contest.title}</div>
+        <div class="contest-result-meta">
+          ID: ${contest.id} | ${contest.total_problems} 题目 | 
+          ${contest.begin_at} - ${contest.end_at}
+        </div>
+      </div>
+    `).join('');
+    results.style.display = 'block';
+  } else {
+    results.innerHTML = '<div class="search-result-item">未找到匹配的比赛</div>';
+    results.style.display = 'block';
+  }
+});
+
+// 选择比赛
+function selectContest(contestId) {
+  const contest = contests.find(c => c.id === contestId);
+  if (!contest) return;
+  
+  selectedContestId = contestId;
+  
+  // 显示选中的比赛
+  document.getElementById('selectedContestTitle').textContent = contest.title;
+  document.getElementById('selectedContestMeta').textContent = 
+    `ID: ${contest.id} | ${contest.total_problems} 题目 | ${contest.begin_at} - ${contest.end_at}`;
+  document.getElementById('selectedContest').classList.add('show');
+  
+  // 隐藏搜索结果
+  document.getElementById('searchResults').style.display = 'none';
+  document.getElementById('contestSearch').value = contest.title;
+  
+  // 清除错误信息
+  hideError('contestError');
+  
+  // 加载题目
+  loadProblems(contestId);
+  
+  updateSummary();
+}
+
+// 移除选中的比赛
+function removeSelectedContest() {
+  selectedContestId = null;
+  selectedProblems = [];
+  document.getElementById('selectedContest').classList.remove('show');
+  document.getElementById('contestSearch').value = '';
+  document.getElementById('problemsGrid').innerHTML = 
+    '<div style="text-align: center; color: #6b7280; padding: 40px;">请先选择比赛</div>';
+  updateSummary();
+}
+
+// 加载题目列表
+async function loadProblems(contestId) {
+  try {
+    // 这里应该调用实际的API
+    // const response = await fetch(`/api/v1/contest/${contestId}/problems`);
+    // problems = await response.json();
+    
+    // 模拟数据
+    problems = [
+      {
+        id: 1001,
+        title: 'A+B Problem',
+        total_submissions: 150,
+        accepted_submissions: 120,
+        languages: ['c', 'cc', 'py', 'java'],
+        can_analyze: true
+      },
+      {
+        id: 1002,
+        title: '字符串匹配',
+        total_submissions: 89,
+        accepted_submissions: 45,
+        languages: ['cc', 'py', 'java'],
+        can_analyze: true
+      },
+      {
+        id: 1003,
+        title: '图论最短路径',
+        total_submissions: 32,
+        accepted_submissions: 18,
+        languages: ['cc', 'java'],
+        can_analyze: true
+      },
+      {
+        id: 1004,
+        title: '动态规划入门',
+        total_submissions: 5,
+        accepted_submissions: 2,
+        languages: ['cc'],
+        can_analyze: false
+      }
+    ];
+    
+    renderProblems();
+  } catch (error) {
+    console.error('Failed to load problems:', error);
+  }
+}
+
+// 渲染题目列表
+function renderProblems() {
+  const grid = document.getElementById('problemsGrid');
+  
+  if (problems.length === 0) {
+    grid.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 40px;">该比赛暂无题目</div>';
+    return;
+  }
+  
+  grid.innerHTML = problems.map(problem => {
+    const passRate = problem.total_submissions > 0 ? 
+      (problem.accepted_submissions / problem.total_submissions * 100).toFixed(1) : 0;
+    
+    return `
+      <div class="problem-card ${!problem.can_analyze ? 'disabled' : ''}" 
+           onclick="${problem.can_analyze ? `toggleProblem(${problem.id})` : ''}">
+        <div class="problem-card-header">
+          <input type="checkbox" class="problem-checkbox" 
+                 id="problem-${problem.id}" 
+                 ${!problem.can_analyze ? 'disabled' : ''}
+                 onchange="toggleProblem(${problem.id})">
+          <label class="problem-title" for="problem-${problem.id}">
+            ${problem.title}
+          </label>
+        </div>
+        <div class="problem-stats">
+          总提交: ${problem.total_submissions} | 通过: ${problem.accepted_submissions} | 通过率: ${passRate}%
+          ${!problem.can_analyze ? '<br><span style="color: #ef4444;">⚠️ 提交数不足，无法分析</span>' : ''}
+        </div>
+        <div class="problem-languages">
+          ${problem.languages.map(lang => `<span class="language-tag">${lang}</span>`).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 切换题目选择
+function toggleProblem(problemId) {
+  const checkbox = document.getElementById(`problem-${problemId}`);
+  const card = checkbox.closest('.problem-card');
+  
+  if (checkbox.checked) {
+    if (!selectedProblems.includes(problemId)) {
+      selectedProblems.push(problemId);
+    }
+    card.classList.add('selected');
+  } else {
+    selectedProblems = selectedProblems.filter(id => id !== problemId);
+    card.classList.remove('selected');
+  }
+  
+  hideError('problemsError');
+  updateSummary();
+}
+
+// 题目选择操作
+function selectAllProblems() {
+  const analyzableProblems = problems.filter(p => p.can_analyze);
+  selectedProblems = analyzableProblems.map(p => p.id);
+  
+  analyzableProblems.forEach(problem => {
+    const checkbox = document.getElementById(`problem-${problem.id}`);
+    const card = checkbox.closest('.problem-card');
+    checkbox.checked = true;
+    card.classList.add('selected');
+  });
+  
+  updateSummary();
+}
+
+function selectNoneProblems() {
+  selectedProblems = [];
+  
+  problems.forEach(problem => {
+    const checkbox = document.getElementById(`problem-${problem.id}`);
+    const card = checkbox.closest('.problem-card');
+    checkbox.checked = false;
+    card.classList.remove('selected');
+  });
+  
+  updateSummary();
+}
+
+function selectRecommendedProblems() {
+  // 推荐通过提交数 >= 10 的题目
+  const recommended = problems.filter(p => p.can_analyze && p.accepted_submissions >= 10);
+  selectedProblems = recommended.map(p => p.id);
+  
+  problems.forEach(problem => {
+    const checkbox = document.getElementById(`problem-${problem.id}`);
+    const card = checkbox.closest('.problem-card');
+    const isRecommended = recommended.find(r => r.id === problem.id);
+    
+    checkbox.checked = !!isRecommended;
+    if (isRecommended) {
+      card.classList.add('selected');
+    } else {
+      card.classList.remove('selected');
+    }
+  });
+  
+  updateSummary();
+}
+
+// 参数范围值更新
+function updateRangeValue(param, value) {
+  if (param === 'similarityThreshold') {
+    document.getElementById('similarityThresholdValue').textContent = value + '%';
+  } else {
+    document.getElementById(param + 'Value').textContent = value;
+  }
+  updateSummary();
+}
+
+// 更新摘要信息
+function updateSummary() {
+  const contestName = selectedContestId ? 
+    contests.find(c => c.id === selectedContestId)?.title || '-' : '-';
+  
+  document.getElementById('summaryContest').textContent = contestName;
+  document.getElementById('summaryProblems').textContent = selectedProblems.length;
+  document.getElementById('summaryTokens').textContent = 
+    document.getElementById('minTokens')?.value || '9';
+  document.getElementById('summaryThreshold').textContent = 
+    (document.getElementById('similarityThreshold')?.value || '70') + '%';
+}
+
+// 步骤导航
+function nextStep() {
+  if (!validateCurrentStep()) return;
+  
+  if (currentStep < 3) {
+    currentStep++;
+    updateStepDisplay();
+    updateFormTitle();
+  } else {
+    submitForm();
+  }
+}
+
+function previousStep() {
+  if (currentStep > 1) {
+    currentStep--;
+    updateStepDisplay();
+    updateFormTitle();
+  }
+}
+
+// 验证当前步骤
+function validateCurrentStep() {
+  hideAllErrors();
+  
+  switch (currentStep) {
+    case 1:
+      if (!selectedContestId) {
+        showError('contestError', '请选择一个比赛');
+        return false;
+      }
+      return true;
+      
+    case 2:
+      if (selectedProblems.length === 0) {
+        showError('problemsError', '请至少选择一个题目');
+        return false;
+      }
+      return true;
+      
+    case 3:
+      return true;
+      
+    default:
+      return false;
+  }
+}
+
+// 更新步骤显示
+function updateStepDisplay() {
+  // 更新步骤指示器
+  for (let i = 1; i <= 3; i++) {
+    const step = document.getElementById(`step-${i}`);
+    step.classList.remove('active', 'completed');
+    
+    if (i < currentStep) {
+      step.classList.add('completed');
+    } else if (i === currentStep) {
+      step.classList.add('active');
+    }
+  }
+  
+  // 更新表单步骤
+  for (let i = 1; i <= 3; i++) {
+    const formStep = document.getElementById(`form-step-${i}`);
+    formStep.classList.toggle('active', i === currentStep);
+  }
+  
+  // 更新导航按钮
+  document.getElementById('prevBtn').disabled = currentStep === 1;
+  const nextBtn = document.getElementById('nextBtn');
+  
+  if (currentStep === 3) {
+    nextBtn.innerHTML = '<span class="loading-spinner" style="display: none;"></span>提交任务 <span>✓</span>';
+  } else {
+    nextBtn.innerHTML = '下一步 <span>›</span>';
+  }
+  
+  // 更新步骤信息
+  document.getElementById('stepInfo').textContent = `步骤 ${currentStep} / 3`;
+}
+
+// 更新表单标题
+function updateFormTitle() {
+  const titles = {
+    1: { icon: '🏆', text: '选择要查重的比赛' },
+    2: { icon: '📝', text: '选择要分析的题目' },
+    3: { icon: '⚙️', text: '配置查重参数' }
+  };
+  
+  const title = titles[currentStep];
+  document.getElementById('form-icon').textContent = title.icon;
+  document.getElementById('form-title-text').textContent = title.text;
+}
+
+// 错误处理
+function showError(elementId, message) {
+  const errorElement = document.getElementById(elementId);
+  errorElement.textContent = message;
+  errorElement.classList.add('show');
+}
+
+function hideError(elementId) {
+  const errorElement = document.getElementById(elementId);
+  errorElement.classList.remove('show');
+}
+
+function hideAllErrors() {
+  document.querySelectorAll('.error-message').forEach(el => {
+    el.classList.remove('show');
+  });
+}
+
+// 提交表单
+async function submitForm() {
+  const nextBtn = document.getElementById('nextBtn');
+  const spinner = nextBtn.querySelector('.loading-spinner');
+  
+  // 显示加载状态
+  nextBtn.disabled = true;
+  spinner.style.display = 'inline-block';
+  
+  const formData = {
+    contest_id: selectedContestId,
+    problem_ids: selectedProblems,
+    min_tokens: parseInt(document.getElementById('minTokens').value),
+    similarity_threshold: parseFloat(document.getElementById('similarityThreshold').value) / 100
+  };
+  
+  try {
+    // 这里应该调用实际的API
+    // const response = await fetch('/api/v1/contest/plagiarism/problems', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify(formData)
+    // });
+    
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // 成功后跳转到结果页面
+    window.location.href = `/plagiarism/contest/${selectedContestId}`;
+    
+  } catch (error) {
+    console.error('Failed to submit form:', error);
+    alert('提交失败，请重试');
+  } finally {
+    nextBtn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}
+
+// 页面加载动画
+document.addEventListener('DOMContentLoaded', function() {
+  const container = document.querySelector('.new-task-container');
+  const elements = document.querySelectorAll('.page-header, .step-indicator, .form-container');
+  
+  container.style.opacity = '0';
+  container.style.transform = 'translateY(20px)';
+  container.style.transition = 'all 0.6s ease';
+  
+  elements.forEach((element, index) => {
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(30px)';
+    element.style.transition = `all 0.6s ease ${index * 0.1}s`;
+  });
+  
+  setTimeout(() => {
+    container.style.opacity = '1';
+    container.style.transform = 'translateY(0)';
+    
+    elements.forEach((element) => {
+      element.style.opacity = '1';
+      element.style.transform = 'translateY(0)';
+    });
+  }, 100);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,769 @@
+{% extends "layout/basic.html" %}
+{% block title %}{{ contest.title }} - 查重结果{% endblock %}
+
+{% block content %}
+<style>
+/* 比赛详情页面样式 */
+.contest-detail-container {
+  max-width: 1400px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+.page-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px 30px;
+  border-radius: 16px;
+  margin-bottom: 30px;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 30px,
+    rgba(255,255,255,0.1) 30px,
+    rgba(255,255,255,0.1) 60px
+  );
+  animation: headerAnimation 12s linear infinite;
+}
+
+@keyframes headerAnimation {
+  0% { transform: translateX(-100px) translateY(-100px) rotate(0deg); }
+  100% { transform: translateX(100px) translateY(100px) rotate(360deg); }
+}
+
+.contest-header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.contest-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.contest-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stats-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stats-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: cardShimmer 3s infinite;
+}
+
+@keyframes cardShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.stats-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stats-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: white;
+}
+
+.stats-card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.stats-card-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.stats-card-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* 问题列表 */
+.problems-section {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.section-header {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.header-btn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+
+.header-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  text-decoration: none;
+}
+
+/* 问题表格 */
+.problems-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.problems-table th {
+  background: #f8fafc;
+  padding: 16px 20px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.problems-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.problems-table tr:last-child td {
+  border-bottom: none;
+}
+
+.problems-table tr:hover {
+  background: #f8fafc;
+}
+
+/* 问题信息 */
+.problem-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.problem-title {
+  font-weight: 600;
+  color: #1f2937;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.problem-title:hover {
+  color: #4facfe;
+  text-decoration: none;
+}
+
+.problem-meta {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* 语言标签 */
+.language-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.language-tag {
+  padding: 4px 8px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.language-tag--cpp {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.language-tag--java {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.language-tag--python {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.language-tag--javascript {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+/* 相似度指示器 */
+.similarity-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.similarity-bar {
+  width: 60px;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.similarity-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.similarity-fill--low {
+  background: #10b981;
+}
+
+.similarity-fill--medium {
+  background: #f59e0b;
+}
+
+.similarity-fill--high {
+  background: #ef4444;
+}
+
+.similarity-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.similarity-text--low {
+  color: #059669;
+}
+
+.similarity-text--medium {
+  color: #d97706;
+}
+
+.similarity-text--high {
+  color: #dc2626;
+}
+
+/* 检查状态 */
+.check-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.check-status--completed {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.check-status--pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.check-status--insufficient {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* 操作按钮 */
+.problem-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.problem-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.problem-btn--view {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.problem-btn--view:hover {
+  background: #bae6fd;
+  color: #0369a1;
+  text-decoration: none;
+}
+
+.problem-btn--check {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.problem-btn--check:hover {
+  background: #d1fae5;
+  color: #059669;
+  text-decoration: none;
+}
+
+.problem-btn--disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.empty-state-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #374151;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .contest-detail-container {
+    padding: 0 16px;
+  }
+  
+  .page-header {
+    padding: 30px 20px;
+  }
+  
+  .contest-title {
+    font-size: 2rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .contest-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .problems-table {
+    font-size: 0.875rem;
+  }
+  
+  .problems-table th,
+  .problems-table td {
+    padding: 12px 16px;
+  }
+}
+
+/* section重置 */
+.section {
+  background: transparent;
+  box-shadow: none;
+}
+
+.section__header {
+  display: none;
+}
+
+.section__body {
+  padding: 0;
+}
+</style>
+
+<div class="section">
+  <div class="section__body">
+    <div class="contest-detail-container">
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div class="contest-header-content">
+          <h1 class="contest-title">
+            <span>🏆</span> {{ contest.title }}
+          </h1>
+          <div class="contest-meta">
+            <div class="meta-item">
+              <span>📅</span>
+              <span>{{ contest.begin_at.strftime('%Y-%m-%d %H:%M') if contest.begin_at else 'N/A' }} - {{ contest.end_at.strftime('%Y-%m-%d %H:%M') if contest.end_at else 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+              <span>🆔</span>
+              <span>{{ contest.id }}</span>
+            </div>
+            <div class="meta-item">
+              <span>📝</span>
+              <span>{{ contest.total_problems }} 题目</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 统计卡片 -->
+      <div class="stats-grid">
+        <div class="stats-card">
+          <div class="stats-card-header">
+            <div class="stats-card-icon">📊</div>
+            <h3 class="stats-card-title">检查进度</h3>
+          </div>
+          <div class="stats-card-value">{{ contest.checked_problems }}/{{ contest.total_problems }}</div>
+          <p class="stats-card-description">{{ "%.1f%%" | format((contest.checked_problems / contest.total_problems * 100) if contest.total_problems > 0 else 0) }} 已完成</p>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-card-header">
+            <div class="stats-card-icon">⚠️</div>
+            <h3 class="stats-card-title">高相似度对</h3>
+          </div>
+          <div class="stats-card-value">{{ total_high_similarity | default(0) }}</div>
+          <p class="stats-card-description">需要重点关注的提交对</p>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-card-header">
+            <div class="stats-card-icon">📈</div>
+            <h3 class="stats-card-title">平均相似度</h3>
+          </div>
+          <div class="stats-card-value">{{ "%.1f%%" | format(avg_similarity * 100) if avg_similarity else 'N/A' }}</div>
+          <p class="stats-card-description">所有检查题目的平均值</p>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-card-header">
+            <div class="stats-card-icon">🕒</div>
+            <h3 class="stats-card-title">最后检查</h3>
+          </div>
+          <div class="stats-card-value" style="font-size: 1.5rem;">
+            {% if contest.last_check_at %}
+              {{ contest.last_check_at.strftime('%m-%d') }}
+            {% else %}
+              未检查
+            {% endif %}
+          </div>
+          <p class="stats-card-description">
+            {% if contest.last_check_at %}
+              {{ contest.last_check_at.strftime('%H:%M:%S') }}
+            {% else %}
+              尚未进行查重检查
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      <!-- 问题列表 -->
+      <div class="problems-section">
+        <div class="section-header">
+          <h2 class="section-title">
+            <span>📝</span> 题目查重结果
+          </h2>
+          <div class="section-actions">
+            <a href="/plagiarism/contest/{{ contest.id }}/new" class="header-btn">
+              <span>➕</span> 新增检查
+            </a>
+            <a href="/plagiarism/contest/{{ contest.id }}/export" class="header-btn">
+              <span>📊</span> 导出报告
+            </a>
+          </div>
+        </div>
+
+        {% if problems and problems|length > 0 %}
+        <table class="problems-table">
+          <thead>
+            <tr>
+              <th>题目信息</th>
+              <th>提交统计</th>
+              <th>支持语言</th>
+              <th>相似度分析</th>
+              <th>检查状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for problem in problems %}
+            <tr>
+              <td>
+                <div class="problem-info">
+                  <a href="/plagiarism/contest/{{ contest.id }}/{{ problem.id }}" class="problem-title">
+                    <span>📄</span> {{ problem.title }}
+                  </a>
+                  <div class="problem-meta">题目 ID: {{ problem.id }}</div>
+                </div>
+              </td>
+              <td>
+                <div style="font-size: 0.875rem;">
+                  <div><strong>总提交:</strong> {{ problem.total_submissions }}</div>
+                  <div><strong>通过:</strong> {{ problem.accepted_submissions }}</div>
+                  <div><strong>通过率:</strong> {{ "%.1f%%" | format((problem.accepted_submissions / problem.total_submissions * 100) if problem.total_submissions > 0 else 0) }}</div>
+                </div>
+              </td>
+              <td>
+                <div class="language-tags">
+                  {% for lang in problem.languages %}
+                    <span class="language-tag language-tag--{{ lang | replace('.', '') | replace('+', 'plus') }}">{{ lang }}</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                {% if problem.plagiarism_result %}
+                  {% set similarity = problem.plagiarism_result.avg_similarity | default(0) %}
+                  <div class="similarity-indicator">
+                    <div class="similarity-bar">
+                      <div class="similarity-fill {% if similarity < 0.3 %}similarity-fill--low{% elif similarity < 0.7 %}similarity-fill--medium{% else %}similarity-fill--high{% endif %}" 
+                           style="width: {{ similarity * 100 }}%"></div>
+                    </div>
+                    <span class="similarity-text {% if similarity < 0.3 %}similarity-text--low{% elif similarity < 0.7 %}similarity-text--medium{% else %}similarity-text--high{% endif %}">
+                      {{ "%.1f%%" | format(similarity * 100) }}
+                    </span>
+                  </div>
+                  <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
+                    {{ problem.plagiarism_result.high_similarity_pairs | length }} 高相似度对
+                  </div>
+                {% else %}
+                  <span style="color: #9ca3af;">未检查</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if problem.plagiarism_result %}
+                  <span class="check-status check-status--completed">
+                    <span>✅</span> 已检查
+                  </span>
+                  <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
+                    {{ problem.last_check_at.strftime('%m-%d %H:%M') if problem.last_check_at }}
+                  </div>
+                {% elif problem.accepted_submissions < 2 %}
+                  <span class="check-status check-status--insufficient">
+                    <span>❌</span> 提交不足
+                  </span>
+                  <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
+                    需要至少 2 个提交
+                  </div>
+                {% else %}
+                  <span class="check-status check-status--pending">
+                    <span>⏳</span> 待检查
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="problem-actions">
+                  {% if problem.plagiarism_result %}
+                    <a href="/plagiarism/contest/{{ contest.id }}/{{ problem.id }}" class="problem-btn problem-btn--view">
+                      <span>👁️</span> 查看
+                    </a>
+                  {% elif problem.accepted_submissions >= 2 %}
+                    <a href="/plagiarism/contest/{{ contest.id }}/{{ problem.id }}/check" class="problem-btn problem-btn--check">
+                      <span>🔍</span> 检查
+                    </a>
+                  {% else %}
+                    <span class="problem-btn problem-btn--disabled">
+                      <span>❌</span> 无法检查
+                    </span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <!-- 空状态 -->
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>暂无题目数据</h3>
+          <p>该比赛暂无可查重的题目数据。</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 页面加载动画
+document.addEventListener('DOMContentLoaded', function() {
+  const container = document.querySelector('.contest-detail-container');
+  const elements = document.querySelectorAll('.page-header, .stats-card, .problems-section');
+  
+  container.style.opacity = '0';
+  container.style.transform = 'translateY(20px)';
+  container.style.transition = 'all 0.6s ease';
+  
+  elements.forEach((element, index) => {
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(30px)';
+    element.style.transition = `all 0.6s ease ${index * 0.1}s`;
+  });
+  
+  setTimeout(() => {
+    container.style.opacity = '1';
+    container.style.transform = 'translateY(0)';
+    
+    elements.forEach((element) => {
+      element.style.opacity = '1';
+      element.style.transform = 'translateY(0)';
+    });
+  }, 100);
+});
+
+// 相似度条动画
+function animateSimilarityBars() {
+  const bars = document.querySelectorAll('.similarity-fill');
+  bars.forEach((bar, index) => {
+    const width = bar.style.width;
+    bar.style.width = '0%';
+    bar.style.transition = `width 1s ease ${index * 0.1}s`;
+    setTimeout(() => {
+      bar.style.width = width;
+    }, 200 + index * 100);
+  });
+}
+
+// 启动动画
+setTimeout(animateSimilarityBars, 800);
+
+// 统计数字动画
+function animateNumbers() {
+  const numberElements = document.querySelectorAll('.stats-card-value');
+  
+  numberElements.forEach(element => {
+    const text = element.textContent;
+    const match = text.match(/(\d+)/);
+    if (!match) return;
+    
+    const target = parseInt(match[1]);
+    let current = 0;
+    const increment = target / 30;
+    
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        current = target;
+        clearInterval(timer);
+      }
+      element.textContent = text.replace(/\d+/, Math.floor(current));
+    }, 50);
+  });
+}
+
+// 启动数字动画
+setTimeout(animateNumbers, 500);
+</script>
+{% endblock %}
