@@ -569,24 +569,57 @@ class ProblemPlagiarismDetailHandler extends Handler {
         this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
         try {
-            // Get contest and problem information
-            const contest = await this.getContestInfo(contest_id);
-            const problem = await this.getProblemInfo(contest_id, parseInt(problem_id));
+            console.log(`[Phosphorus] ProblemPlagiarismDetailHandler.get() called for contest ${contest_id}, problem ${problem_id}`);
             
-            if (!contest || !problem) {
-                throw new NotFoundError('Contest or problem not found');
+            // Get contest information from database
+            const contest = await this.findContestById(contest_id);
+            if (!contest) {
+                throw new NotFoundError(`Contest ${contest_id} not found`);
             }
             
-            // Get language statistics and results
-            const languageResults = await this.getLanguageResults(contest_id, parseInt(problem_id));
+            // Get plagiarism results for this specific problem
+            const db = (global as any).Hydro.service.db;
+            const plagiarismResult = await db.collection('check_plagiarism_results').findOne({
+                contest_id: contest_id,
+                problem_id: parseInt(problem_id)
+            });
+            
+            if (!plagiarismResult) {
+                console.log(`[Phosphorus] No plagiarism result found for contest ${contest_id}, problem ${problem_id}`);
+                this.response.template = 'plagiarism_problem_detail.html';
+                this.response.body = {
+                    contest,
+                    problem: { id: problem_id, title: `题目 ${problem_id}` },
+                    error: '该题目还没有查重数据'
+                };
+                return;
+            }
+            
+            // Process the plagiarism result
+            const problemData = {
+                id: problem_id,
+                title: plagiarismResult.problem_title || `题目 ${problem_id}`,
+                total_submissions: plagiarismResult.submission_stats?.total_submissions || 0,
+                high_similarity_pairs: plagiarismResult.high_similarity_pairs?.length || 0,
+                max_similarity: plagiarismResult.max_similarity || 0,
+                avg_similarity: plagiarismResult.avg_similarity || 0,
+                clusters: plagiarismResult.clusters || [],
+                high_similarity_pairs_data: plagiarismResult.high_similarity_pairs || [],
+                languages: this.extractLanguages(plagiarismResult),
+                language_stats: this.processLanguageStats(plagiarismResult)
+            };
+            
+            console.log(`[Phosphorus] Found plagiarism result with ${problemData.high_similarity_pairs} high similarity pairs`);
             
             this.response.template = 'plagiarism_problem_detail.html';
             this.response.body = {
                 contest,
-                problem,
-                language_results: languageResults
+                problem: problemData,
+                plagiarism_result: plagiarismResult
             };
+            
         } catch (error: any) {
+            console.error('[Phosphorus] Exception in ProblemPlagiarismDetailHandler:', error);
             if (error instanceof NotFoundError) {
                 throw error;
             }
@@ -595,100 +628,132 @@ class ProblemPlagiarismDetailHandler extends Handler {
         }
     }
     
-    private async getContestInfo(contestId: string): Promise<any> {
-        try {
-            const result = await makeApiRequest('/api/v1/contests/plagiarism');
-            if (result.success) {
-                const contests = result.data || [];
-                return contests.find((c: any) => c.id.toString() === contestId.toString()) || null;
-            }
-        } catch (error) {
-            console.error('Failed to get contest info:', error);
+    private extractLanguages(plagiarismResult: any): string[] {
+        const languages = new Set<string>();
+        
+        // Extract from high similarity pairs
+        if (plagiarismResult.high_similarity_pairs) {
+            plagiarismResult.high_similarity_pairs.forEach((pair: any) => {
+                if (pair.file1_language) languages.add(pair.file1_language);
+                if (pair.file2_language) languages.add(pair.file2_language);
+            });
         }
-        return null;
+        
+        // Extract from submission stats
+        if (plagiarismResult.submission_stats?.by_language) {
+            Object.keys(plagiarismResult.submission_stats.by_language).forEach(lang => {
+                languages.add(lang);
+            });
+        }
+        
+        return Array.from(languages);
     }
     
-    private async getProblemInfo(contestId: string, problemId: number): Promise<any> {
-        try {
-            const result = await makeApiRequest(`/api/v1/contest/${contestId}/problems`);
-            if (result.success) {
-                const problems = result.data || [];
-                const problem = problems.find((p: any) => p.id.toString() === problemId.toString());
-                if (problem) {
-                    problem.last_check_at = problem.last_check_at ? new Date(problem.last_check_at) : null;
-                    return problem;
-                }
-            }
-        } catch (error) {
-            console.error('Failed to get problem info:', error);
+    private processLanguageStats(plagiarismResult: any): any[] {
+        const stats: any[] = [];
+        
+        if (plagiarismResult.submission_stats?.by_language) {
+            Object.entries(plagiarismResult.submission_stats.by_language).forEach(([language, data]: [string, any]) => {
+                stats.push({
+                    language,
+                    language_display: this.getLanguageDisplayName(language),
+                    language_icon: this.getLanguageIcon(language),
+                    submission_count: data.count || 0,
+                    high_similarity_pairs: this.countHighSimilarityPairsByLanguage(plagiarismResult, language),
+                    max_similarity: this.getMaxSimilarityByLanguage(plagiarismResult, language),
+                    avg_similarity: this.getAvgSimilarityByLanguage(plagiarismResult, language)
+                });
+            });
         }
-        return null;
+        
+        return stats.sort((a, b) => b.submission_count - a.submission_count);
     }
     
-    private async getLanguageResults(contestId: string, problemId: number): Promise<any[]> {
+    private countHighSimilarityPairsByLanguage(plagiarismResult: any, language: string): number {
+        if (!plagiarismResult.high_similarity_pairs) return 0;
+        
+        return plagiarismResult.high_similarity_pairs.filter((pair: any) => 
+            pair.file1_language === language || pair.file2_language === language
+        ).length;
+    }
+    
+    private getMaxSimilarityByLanguage(plagiarismResult: any, language: string): number {
+        if (!plagiarismResult.high_similarity_pairs) return 0;
+        
+        const pairs = plagiarismResult.high_similarity_pairs.filter((pair: any) => 
+            pair.file1_language === language || pair.file2_language === language
+        );
+        
+        if (pairs.length === 0) return 0;
+        
+        return Math.max(...pairs.map((pair: any) => pair.similarity || 0));
+    }
+    
+    private getAvgSimilarityByLanguage(plagiarismResult: any, language: string): number {
+        if (!plagiarismResult.high_similarity_pairs) return 0;
+        
+        const pairs = plagiarismResult.high_similarity_pairs.filter((pair: any) => 
+            pair.file1_language === language || pair.file2_language === language
+        );
+        
+        if (pairs.length === 0) return 0;
+        
+        const totalSimilarity = pairs.reduce((sum: number, pair: any) => sum + (pair.similarity || 0), 0);
+        return totalSimilarity / pairs.length;
+    }
+    
+    private async findContestById(contestId: string): Promise<any | null> {
         try {
-            // Get language statistics
-            const statsResult = await makeApiRequest(
-                `/api/v1/contest/${contestId}/problem/${problemId}/languages`
-            );
-            
-            if (!statsResult.success) {
-                return [];
-            }
-            
-            const languageStats = statsResult.data || [];
-            
-            // Get plagiarism result
-            let plagiarismResult: any = null;
-            try {
-                const resultResponse = await makeApiRequest(
-                    `/api/v1/contest/${contestId}/problem/${problemId}/plagiarism`
-                );
-                if (resultResponse.success) {
-                    plagiarismResult = resultResponse.data;
-                }
-            } catch (error) {
-                console.warn('Failed to get plagiarism result:', error);
-            }
-            
-            // Combine stats with results
-            const languageResults: any[] = [];
-            
-            languageStats.forEach((stat: any) => {
-                if (!stat.can_analyze) {
-                    return;
-                }
-                
-                const langResult: any = {
-                    language: stat.language,
-                    language_display: this.getLanguageDisplayName(stat.language),
-                    language_icon: this.getLanguageIcon(stat.language),
-                    submission_count: stat.submission_count,
-                    unique_users: stat.unique_users,
-                    similarity_pairs: [],
-                    avg_similarity: 0.0,
-                    high_similarity_pairs: []
-                };
-                
-                // Add plagiarism data if available
-                if (plagiarismResult) {
-                    // Generate mock pairs for demonstration
-                    langResult.similarity_pairs = this.generateMockPairs(stat.submission_count);
-                    langResult.high_similarity_pairs = langResult.similarity_pairs;
-                    if (langResult.similarity_pairs.length > 0) {
-                        langResult.avg_similarity = langResult.similarity_pairs.reduce(
-                            (sum: number, p: any) => sum + p.avg_similarity, 0
-                        ) / langResult.similarity_pairs.length;
-                    }
-                }
-                
-                languageResults.push(langResult);
+            const db = (global as any).Hydro.service.db;
+            const contestDoc = await db.collection('document').findOne({
+                _id: new (global as any).Hydro.lib.ObjectId(contestId),
+                docType: 30 // CONTEST
             });
             
-            return languageResults;
+            if (!contestDoc) {
+                return null;
+            }
+            
+            return {
+                id: contestDoc._id.toString(),
+                title: contestDoc.title || `比赛 ${contestDoc._id}`,
+                begin_at: contestDoc.beginAt ? new Date(contestDoc.beginAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : null,
+                end_at: contestDoc.endAt ? new Date(contestDoc.endAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit', 
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : null,
+                status: this.getContestStatus(contestDoc)
+            };
         } catch (error) {
-            console.error('Failed to get language results:', error);
-            return [];
+            console.error('Failed to get contest by ID:', error);
+            return null;
+        }
+    }
+
+    private getContestStatus(contestDoc: any): string {
+        const now = new Date();
+        const beginAt = contestDoc.beginAt ? new Date(contestDoc.beginAt) : null;
+        const endAt = contestDoc.endAt ? new Date(contestDoc.endAt) : null;
+
+        if (!beginAt || !endAt) {
+            return '未定义';
+        }
+
+        if (now < beginAt) {
+            return '未开始';
+        } else if (now > endAt) {
+            return '已结束';
+        } else {
+            return '进行中';
         }
     }
     
