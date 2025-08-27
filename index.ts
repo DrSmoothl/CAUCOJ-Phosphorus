@@ -590,11 +590,28 @@ class PlagiarismApiHandler extends Handler {
         try {
             console.log('Getting problems for contest ID (string):', contestId);
             
-            // 首先获取比赛文档 - 确保使用字符串匹配
-            const contestDoc = await db.collection('document').findOne({
-                _id: contestId.toString(), // 明确转换为字符串
-                docType: 30
-            });
+            // 使用灵活的查询方式查找比赛文档
+            let contestDoc: any = null;
+            
+            // 方式1: 直接使用传入的ID查询
+            try {
+                contestDoc = await db.collection('document').findOne({ 
+                    _id: contestId,
+                    docType: 30 
+                });
+            } catch (error) {
+                // 查询失败，继续尝试其他方式
+            }
+            
+            // 方式2: 如果直接查询失败，尝试字符串匹配
+            if (!contestDoc) {
+                try {
+                    const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+                    contestDoc = allContests.find(c => c._id.toString() === contestId.toString()) || null;
+                } catch (error) {
+                    // 查询失败
+                }
+            }
             
             console.log('Contest document found:', !!contestDoc);
             console.log('Contest pids:', contestDoc?.pids);
