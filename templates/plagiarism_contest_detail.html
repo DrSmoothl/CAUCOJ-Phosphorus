@@ -626,7 +626,7 @@
           {% if problems and problems|length > 0 %}
           <div class="problems-grid">
             {% for problem in problems %}
-            <div class="problem-card" onclick="viewProblemDetail('{{ contest.id }}', '{{ problem.id }}')">
+            <div class="problem-card" data-contest-id="{{ contest.id }}" data-problem-id="{{ problem.id }}" style="cursor: pointer;">
               <div class="problem-header">
                 <div>
                   <h3 class="problem-title">{{ problem.title or ('题目 ' + problem.id|string) }}</h3>
@@ -739,11 +739,17 @@
 </div>
 
 <script>
-// 确保函数在全局作用域中定义
-window.viewProblemDetail = function(contestId, problemId) {
-  console.log('viewProblemDetail called with:', contestId, problemId);
-  window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
-};
+// 立即定义全局函数，确保在任何 onclick 调用之前都可用
+(function() {
+  // 查看题目详情
+  window.viewProblemDetail = function(contestId, problemId) {
+    console.log('viewProblemDetail called with:', contestId, problemId);
+    window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
+  };
+  
+  // 立即验证函数是否已定义
+  console.log('viewProblemDetail function defined:', typeof window.viewProblemDetail);
+})();
 
 // 下载报告
 function downloadReport() {
@@ -815,9 +821,17 @@ document.addEventListener('DOMContentLoaded', function() {
     console.error('viewProblemDetail function is not defined!');
   }
   
-  // 为题目卡片添加键盘导航
+  // 为题目卡片添加点击事件监听器
   const problemCards = document.querySelectorAll('.problem-card');
-  problemCards.forEach((card, index) => {
+  problemCards.forEach((card) => {
+    card.addEventListener('click', function() {
+      const contestId = card.getAttribute('data-contest-id');
+      const problemId = card.getAttribute('data-problem-id');
+      console.log('Problem card clicked:', contestId, problemId);
+      window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
+    });
+    
+    // 添加键盘导航
     card.setAttribute('tabindex', '0');
     card.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === ' ') {
