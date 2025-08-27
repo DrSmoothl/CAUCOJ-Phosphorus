@@ -216,14 +216,14 @@ class ContestPlagiarismListHandler extends Handler {
                     contest.last_check_at = contest.last_check_at ? new Date(contest.last_check_at) : null;
                 });
                 
-                this.response.template = 'contest_list.html';
+                this.response.template = 'plagiarism_contest_list.html';
                 this.response.body = { contests };
             } else {
-                this.response.template = 'contest_list.html';
+                this.response.template = 'plagiarism_contest_list.html';
                 this.response.body = { contests: [], error: result.message || 'Failed to fetch contests' };
             }
         } catch (error: any) {
-            this.response.template = 'contest_list.html';
+            this.response.template = 'plagiarism_contest_list.html';
             this.response.body = { contests: [], error: error.message };
         }
     }
@@ -254,7 +254,7 @@ class ContestPlagiarismDetailHandler extends Handler {
             
             const avgSimilarity = this.calculateAverageSimilarity(problems);
             
-            this.response.template = 'contest_detail.html';
+            this.response.template = 'plagiarism_contest_detail.html';
             this.response.body = {
                 contest,
                 problems,
@@ -265,7 +265,7 @@ class ContestPlagiarismDetailHandler extends Handler {
             if (error instanceof NotFoundError) {
                 throw error;
             }
-            this.response.template = 'contest_detail.html';
+            this.response.template = 'plagiarism_contest_detail.html';
             this.response.body = { error: error.message };
         }
     }
@@ -360,7 +360,7 @@ class ProblemPlagiarismDetailHandler extends Handler {
             // Get language statistics and results
             const languageResults = await this.getLanguageResults(contest_id, parseInt(problem_id));
             
-            this.response.template = 'problem_detail.html';
+            this.response.template = 'plagiarism_problem_detail.html';
             this.response.body = {
                 contest,
                 problem,
@@ -370,7 +370,7 @@ class ProblemPlagiarismDetailHandler extends Handler {
             if (error instanceof NotFoundError) {
                 throw error;
             }
-            this.response.template = 'problem_detail.html';
+            this.response.template = 'plagiarism_problem_detail.html';
             this.response.body = { error: error.message };
         }
     }
