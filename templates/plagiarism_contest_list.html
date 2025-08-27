@@ -530,8 +530,8 @@
 <script>
 // 将服务器端变量传递给客户端
 window.phosphorusData = {
-  contests: {{ contests|tojson if contests else '[]' }},
-  error: {{ error|tojson if error else 'null' }}
+  contests: {{ contests|dump if contests else '[]' }},
+  error: {{ error|dump if error else 'null' }}
 };
 
 // 搜索功能
