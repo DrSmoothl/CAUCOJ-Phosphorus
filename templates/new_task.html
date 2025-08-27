@@ -623,7 +623,7 @@
                 <option value="{{ contest.id }}" data-title="{{ contest.title }}">
                   {{ contest.title }}
                   {% if contest.begin_at %}
-                  - 开始时间: {{ contest.begin_at | date('%Y-%m-%d %H:%M') }}
+                  - 开始时间: {{ contest.begin_at }}
                   {% endif %}
                 </option>
                 {% endfor %}

@@ -631,8 +631,20 @@ class NewPlagiarismTaskHandler extends Handler {
             return contestDocs.map(doc => ({
                 id: doc._id.toString(), // 使用_id作为交换标识
                 title: doc.title || `比赛 ${doc._id}`,
-                begin_at: doc.beginAt ? new Date(doc.beginAt) : null,
-                end_at: doc.endAt ? new Date(doc.endAt) : null,
+                begin_at: doc.beginAt ? new Date(doc.beginAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : null,
+                end_at: doc.endAt ? new Date(doc.endAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit', 
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : null,
                 owner: doc.owner || 0,
                 attend: doc.attend || 0,
                 status: this.getContestStatus(doc)
