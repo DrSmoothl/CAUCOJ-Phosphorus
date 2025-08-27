@@ -565,8 +565,16 @@ document.addEventListener('keydown', function(e) {
 
 // 页面加载完成后的初始化
 document.addEventListener('DOMContentLoaded', function() {
+  // 输出调试信息
+  console.log('[Phosphorus Template] Page loaded');
+  console.log('[Phosphorus Template] contests variable:', typeof contests !== 'undefined' ? contests : 'undefined');
+  console.log('[Phosphorus Template] error variable:', typeof error !== 'undefined' ? error : 'undefined');
+  
   // 聚焦搜索框
-  document.getElementById('searchInput').focus();
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.focus();
+  }
   
   // 显示加载提示
   const contestsGrid = document.getElementById('contestsGrid');

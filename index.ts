@@ -19,7 +19,11 @@ function getPhosphorusApiBase(): string {
  * Make HTTP request to Phosphorus API
  */
 async function makeApiRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {
-    const url = `${getPhosphorusApiBase()}${endpoint}`;
+    const apiBase = getPhosphorusApiBase();
+    const url = `${apiBase}${endpoint}`;
+    
+    console.log(`[Phosphorus] Making API request: ${method} ${url}`);
+    console.log(`[Phosphorus] API Base URL: ${apiBase}`);
     
     const options: RequestInit = {
         method,
@@ -30,17 +34,24 @@ async function makeApiRequest(endpoint: string, method: string = 'GET', data?: a
     
     if (data && method !== 'GET') {
         options.body = JSON.stringify(data);
+        console.log(`[Phosphorus] Request body:`, data);
     }
     
     try {
         const response = await fetch(url, options);
+        console.log(`[Phosphorus] Response status: ${response.status} ${response.statusText}`);
         
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[Phosphorus] Error response:`, errorText);
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        return await response.json();
+        const result = await response.json();
+        console.log(`[Phosphorus] Response data:`, result);
+        return result;
     } catch (error: any) {
+        console.error(`[Phosphorus] API request failed:`, error);
         throw new Error(`API request failed: ${error.message}`);
     }
 }
@@ -203,26 +214,40 @@ class ContestPlagiarismListHandler extends Handler {
     async get() {
         this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
+        console.log('[Phosphorus] ContestPlagiarismListHandler.get() called');
+        
         try {
+            console.log('[Phosphorus] Calling API endpoint: /api/v1/contests/plagiarism');
             const result = await makeApiRequest('/api/v1/contests/plagiarism');
+            
+            console.log('[Phosphorus] API result:', result);
+            console.log('[Phosphorus] Result success:', result.success);
+            console.log('[Phosphorus] Result data length:', result.data ? result.data.length : 'null/undefined');
             
             if (result.success) {
                 const contests = result.data || [];
+                console.log('[Phosphorus] Contests data:', contests);
                 
                 // Enrich contest data
-                contests.forEach((contest: any) => {
+                contests.forEach((contest: any, index: number) => {
+                    console.log(`[Phosphorus] Processing contest ${index}:`, contest);
                     contest.begin_at = contest.begin_at ? new Date(contest.begin_at) : null;
                     contest.end_at = contest.end_at ? new Date(contest.end_at) : null;
                     contest.last_check_at = contest.last_check_at ? new Date(contest.last_check_at) : null;
                 });
                 
+                console.log('[Phosphorus] Enriched contests:', contests);
+                
                 this.response.template = 'plagiarism_contest_list.html';
                 this.response.body = { contests };
+                console.log('[Phosphorus] Template set to plagiarism_contest_list.html with contests:', contests.length);
             } else {
+                console.warn('[Phosphorus] API returned success=false:', result.message);
                 this.response.template = 'plagiarism_contest_list.html';
                 this.response.body = { contests: [], error: result.message || 'Failed to fetch contests' };
             }
         } catch (error: any) {
+            console.error('[Phosphorus] Exception in ContestPlagiarismListHandler:', error);
             this.response.template = 'plagiarism_contest_list.html';
             this.response.body = { contests: [], error: error.message };
         }
