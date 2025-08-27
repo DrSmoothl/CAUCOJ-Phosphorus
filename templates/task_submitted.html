@@ -1,0 +1,656 @@
+{% extends "layout/basic.html" %}
+{% block title %}查重任务已提交{% endblock %}
+
+{% block content %}
+<style>
+/* 任务提交成功页面样式 */
+.task-submitted-container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+.success-header {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 40px 30px;
+  border-radius: 16px;
+  margin-bottom: 30px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.success-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 30px,
+    rgba(255,255,255,0.1) 30px,
+    rgba(255,255,255,0.1) 60px
+  );
+  animation: headerAnimation 15s linear infinite;
+}
+
+@keyframes headerAnimation {
+  0% { transform: translateX(-100px) translateY(-100px) rotate(0deg); }
+  100% { transform: translateX(100px) translateY(100px) rotate(360deg); }
+}
+
+.header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.success-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+.success-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+}
+
+.success-description {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 0;
+}
+
+/* 任务信息卡片 */
+.task-info-card {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border: 2px solid #e5e7eb;
+}
+
+.task-info-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.detail-item {
+  text-align: center;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.detail-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.detail-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.task-id {
+  background: #f0f9ff;
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  margin-top: 20px;
+}
+
+.task-id-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.task-id-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  font-family: monospace;
+}
+
+/* 等待状态指示器 */
+.waiting-indicator {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.progress-ring {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  position: relative;
+}
+
+.progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.progress-ring circle {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.progress-ring .background {
+  stroke: #e5e7eb;
+}
+
+.progress-ring .progress {
+  stroke: #3b82f6;
+  stroke-dasharray: 251;
+  stroke-dashoffset: 251;
+  animation: progress 3s ease-in-out infinite;
+}
+
+@keyframes progress {
+  0% { stroke-dashoffset: 251; }
+  50% { stroke-dashoffset: 125; }
+  100% { stroke-dashoffset: 251; }
+}
+
+.waiting-text {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.waiting-description {
+  color: #6b7280;
+  margin-bottom: 20px;
+}
+
+.estimated-time {
+  background: #fef3c7;
+  color: #d97706;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+/* 快捷操作按钮 */
+.quick-actions {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.actions-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 20px 0;
+  text-align: center;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background: #f8fafc;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #374151;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border-color: #3b82f6;
+}
+
+.action-btn.primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  border-color: #1d4ed8;
+}
+
+.action-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-color: #10b981;
+}
+
+.action-btn.success:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border-color: #059669;
+}
+
+.action-icon {
+  font-size: 2rem;
+}
+
+.action-text {
+  font-weight: 600;
+  text-align: center;
+}
+
+.action-description {
+  font-size: 0.875rem;
+  opacity: 0.8;
+  text-align: center;
+  margin: 0;
+}
+
+/* 通知设置 */
+.notification-card {
+  background: #f0f9ff;
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 30px;
+}
+
+.notification-title {
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.notification-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.notification-option:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.notification-option input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .task-submitted-container {
+    padding: 0 16px;
+  }
+  
+  .success-header {
+    padding: 30px 20px;
+  }
+  
+  .success-title {
+    font-size: 2rem;
+  }
+  
+  .task-details {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 自动刷新提示 */
+.auto-refresh {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #3b82f6;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  z-index: 1000;
+  animation: slideIn 0.5s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.refresh-countdown {
+  font-weight: 600;
+  margin-left: 8px;
+}
+</style>
+
+<div class="task-submitted-container">
+  <!-- 成功提示头部 -->
+  <div class="success-header">
+    <div class="header-content">
+      <div class="success-icon">✅</div>
+      <h1 class="success-title">查重任务已成功提交！</h1>
+      <p class="success-description">您的代码查重分析任务正在后台处理中，请耐心等待</p>
+    </div>
+  </div>
+
+  <!-- 任务信息卡片 -->
+  <div class="task-info-card">
+    <h2 class="task-info-title">
+      <span>📋</span> 任务详情
+    </h2>
+    
+    <div class="task-details">
+      <div class="detail-item">
+        <div class="detail-value">{{ contest_name }}</div>
+        <div class="detail-label">比赛名称</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-value">{{ problem_count }}</div>
+        <div class="detail-label">选择题目</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-value">{{ min_tokens }}</div>
+        <div class="detail-label">最小Token数</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-value">{{ similarity_threshold }}%</div>
+        <div class="detail-label">相似度阈值</div>
+      </div>
+    </div>
+
+    {% if task_id %}
+    <div class="task-id">
+      <div class="task-id-label">任务ID（用于查询进度）</div>
+      <div class="task-id-value">{{ task_id }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 等待状态指示器 -->
+  <div class="waiting-indicator">
+    <div class="progress-ring">
+      <svg viewBox="0 0 84 84">
+        <circle class="background" cx="42" cy="42" r="40"></circle>
+        <circle class="progress" cx="42" cy="42" r="40"></circle>
+      </svg>
+    </div>
+    <div class="waiting-text">正在分析代码相似性</div>
+    <div class="waiting-description">
+      系统正在对提交的代码进行深度分析，检测潜在的抄袭行为
+    </div>
+    <div class="estimated-time">
+      ⏱️ 预计处理时间：{{ estimated_time || '30-60分钟' }}
+    </div>
+  </div>
+
+  <!-- 快捷操作按钮 -->
+  <div class="quick-actions">
+    <h3 class="actions-title">您可以进行以下操作</h3>
+    
+    <div class="action-buttons">
+      <a href="/plagiarism/contest/{{ contest_id }}" class="action-btn primary">
+        <div class="action-icon">📊</div>
+        <div class="action-text">查看结果</div>
+        <div class="action-description">查看已完成的查重结果</div>
+      </a>
+      
+      <a href="/plagiarism/new" class="action-btn">
+        <div class="action-icon">➕</div>
+        <div class="action-text">新建任务</div>
+        <div class="action-description">创建另一个查重任务</div>
+      </a>
+      
+      <a href="/plagiarism/contest" class="action-btn">
+        <div class="action-icon">📋</div>
+        <div class="action-text">任务列表</div>
+        <div class="action-description">查看所有查重任务</div>
+      </a>
+      
+      <a href="/plagiarism" class="action-btn success">
+        <div class="action-icon">🏠</div>
+        <div class="action-text">返回首页</div>
+        <div class="action-description">回到查重系统首页</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- 通知设置 -->
+  <div class="notification-card">
+    <h4 class="notification-title">
+      <span>🔔</span> 通知设置
+    </h4>
+    <div class="notification-options">
+      <label class="notification-option">
+        <input type="checkbox" id="emailNotification" checked>
+        <span>邮件通知</span>
+      </label>
+      <label class="notification-option">
+        <input type="checkbox" id="browserNotification">
+        <span>浏览器通知</span>
+      </label>
+      <label class="notification-option">
+        <input type="checkbox" id="autoRefresh" checked>
+        <span>自动刷新</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- 自动刷新提示 -->
+<div class="auto-refresh" id="refreshIndicator" style="display: none;">
+  <span>🔄 页面将在</span>
+  <span class="refresh-countdown" id="countdown">60</span>
+  <span>秒后自动刷新</span>
+</div>
+
+<script>
+// 自动刷新功能
+let refreshInterval;
+let countdownInterval;
+let countdown = 60;
+
+function startAutoRefresh() {
+  const autoRefreshCheckbox = document.getElementById('autoRefresh');
+  const refreshIndicator = document.getElementById('refreshIndicator');
+  const countdownElement = document.getElementById('countdown');
+  
+  if (autoRefreshCheckbox.checked) {
+    refreshIndicator.style.display = 'block';
+    
+    countdownInterval = setInterval(() => {
+      countdown--;
+      countdownElement.textContent = countdown;
+      
+      if (countdown <= 0) {
+        window.location.reload();
+      }
+    }, 1000);
+    
+    refreshInterval = setTimeout(() => {
+      window.location.reload();
+    }, 60000);
+  } else {
+    refreshIndicator.style.display = 'none';
+    clearInterval(countdownInterval);
+    clearTimeout(refreshInterval);
+    countdown = 60;
+    countdownElement.textContent = countdown;
+  }
+}
+
+// 浏览器通知
+function requestNotificationPermission() {
+  const browserNotificationCheckbox = document.getElementById('browserNotification');
+  
+  if (browserNotificationCheckbox.checked && 'Notification' in window) {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        if (permission !== 'granted') {
+          browserNotificationCheckbox.checked = false;
+        }
+      });
+    } else if (Notification.permission === 'denied') {
+      browserNotificationCheckbox.checked = false;
+      alert('浏览器通知已被禁用，请在浏览器设置中启用通知权限');
+    }
+  }
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+  // 自动刷新事件监听
+  document.getElementById('autoRefresh').addEventListener('change', startAutoRefresh);
+  
+  // 浏览器通知事件监听
+  document.getElementById('browserNotification').addEventListener('change', requestNotificationPermission);
+  
+  // 默认启动自动刷新
+  startAutoRefresh();
+  
+  // 保存通知设置到本地存储
+  const checkboxes = document.querySelectorAll('.notification-option input[type="checkbox"]');
+  checkboxes.forEach(checkbox => {
+    // 恢复保存的设置
+    const saved = localStorage.getItem(checkbox.id);
+    if (saved !== null) {
+      checkbox.checked = saved === 'true';
+    }
+    
+    // 保存设置变化
+    checkbox.addEventListener('change', function() {
+      localStorage.setItem(this.id, this.checked);
+    });
+  });
+  
+  // 页面动画效果
+  const cards = document.querySelectorAll('.task-info-card, .waiting-indicator, .quick-actions');
+  cards.forEach((card, index) => {
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(20px)';
+    card.style.transition = 'all 0.6s ease';
+    
+    setTimeout(() => {
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    }, index * 200 + 300);
+  });
+});
+
+// 页面离开前清理定时器
+window.addEventListener('beforeunload', function() {
+  clearInterval(countdownInterval);
+  clearTimeout(refreshInterval);
+});
+
+// 检查任务状态的函数（可以通过AJAX调用）
+async function checkTaskStatus() {
+  try {
+    const taskId = '{{ task_id }}';
+    if (!taskId) return;
+    
+    const response = await fetch(`/plagiarism/api/task/${taskId}/status`);
+    const data = await response.json();
+    
+    if (data.success && data.status === 'completed') {
+      // 任务完成，显示通知并重定向
+      if (document.getElementById('browserNotification').checked && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('查重任务完成', {
+          body: '您的代码查重分析已完成，点击查看结果',
+          icon: '/favicon.ico'
+        });
+      }
+      
+      // 3秒后自动跳转到结果页面
+      setTimeout(() => {
+        window.location.href = `/plagiarism/contest/{{ contest_id }}`;
+      }, 3000);
+      
+      // 更新页面状态
+      document.querySelector('.waiting-text').textContent = '分析完成！';
+      document.querySelector('.waiting-description').textContent = '正在跳转到结果页面...';
+      document.querySelector('.estimated-time').textContent = '✅ 任务已完成';
+      document.querySelector('.estimated-time').style.background = '#dcfce7';
+      document.querySelector('.estimated-time').style.color = '#166534';
+    }
+  } catch (error) {
+    console.warn('检查任务状态失败:', error);
+  }
+}
+
+// 每30秒检查一次任务状态
+setInterval(checkTaskStatus, 30000);
+</script>
+{% endblock %}

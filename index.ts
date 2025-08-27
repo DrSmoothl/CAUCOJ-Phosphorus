@@ -688,6 +688,9 @@ class NewPlagiarismTaskHandler extends Handler {
                 throw new Error('请选择至少一个题目');
             }
             
+            // 获取比赛信息用于显示
+            const contest = await this.getContestById(contest_id.toString());
+            
             // 调用Phosphorus API创建查重任务
             const taskData = {
                 contest_id: contest_id.toString(),
@@ -699,8 +702,18 @@ class NewPlagiarismTaskHandler extends Handler {
             const result = await makeApiRequest('/api/v1/contest/plagiarism/problems', 'POST', taskData);
             
             if (result.success) {
-                // 成功创建任务，重定向到比赛详情页
-                this.response.redirect = `/plagiarism/contest/${contest_id}`;
+                // 成功创建任务，显示等待页面
+                this.response.template = 'task_submitted.html';
+                this.response.body = {
+                    contest_id: contest_id.toString(),
+                    contest_name: contest?.title || '未知比赛',
+                    problem_count: problem_ids.length,
+                    min_tokens: parseInt(min_tokens.toString()),
+                    similarity_threshold: Math.round(parseFloat(similarity_threshold.toString()) * 100),
+                    task_id: result.task_id || null,
+                    estimated_time: this.estimateProcessingTime(problem_ids.length),
+                    success: true
+                };
             } else {
                 throw new Error(result.message || '创建查重任务失败');
             }
@@ -769,6 +782,116 @@ class NewPlagiarismTaskHandler extends Handler {
             return '已结束';
         }
     }
+    
+    // 新增：根据比赛ID获取比赛信息
+    private async getContestById(contestId: string): Promise<any | null> {
+        try {
+            // 使用灵活的查询方式查找比赛文档
+            let contestDoc: any = null;
+            
+            try {
+                contestDoc = await db.collection('document').findOne({ 
+                    _id: contestId,
+                    docType: 30 
+                });
+            } catch (error) {
+                // 查询失败，继续尝试其他方式
+            }
+            
+            if (!contestDoc) {
+                try {
+                    const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+                    contestDoc = allContests.find(c => c._id.toString() === contestId.toString()) || null;
+                } catch (error) {
+                    // 查询失败
+                }
+            }
+            
+            if (!contestDoc) {
+                return null;
+            }
+            
+            return {
+                id: contestDoc._id.toString(),
+                title: contestDoc.title || `比赛 ${contestDoc._id}`,
+                begin_at: contestDoc.beginAt ? new Date(contestDoc.beginAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : null,
+                end_at: contestDoc.endAt ? new Date(contestDoc.endAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit', 
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : null,
+                status: this.getContestStatus(contestDoc)
+            };
+        } catch (error) {
+            console.error('Failed to get contest by ID:', error);
+            return null;
+        }
+    }
+    
+    // 新增：估算处理时间
+    private estimateProcessingTime(problemCount: number): string {
+        if (problemCount <= 2) {
+            return '15-30分钟';
+        } else if (problemCount <= 5) {
+            return '30-45分钟';
+        } else if (problemCount <= 10) {
+            return '45-90分钟';
+        } else {
+            return '1-2小时';
+        }
+    }
+}
+
+/**
+ * Task Status Handler - /plagiarism/api/task/:task_id/status
+ */
+class TaskStatusHandler extends Handler {
+    async get({ task_id }: { task_id: string }) {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        try {
+            console.log('Checking task status for ID:', task_id);
+            
+            // 调用Phosphorus API检查任务状态
+            const result = await makeApiRequest(`/api/v1/task/${task_id}/status`, 'GET');
+            
+            this.response.body = {
+                success: true,
+                task_id: task_id,
+                status: result.status || 'unknown',
+                progress: result.progress || 0,
+                message: result.message || '',
+                completed: result.completed || false,
+                result_url: result.completed ? `/plagiarism/contest/${result.contest_id}` : null,
+                estimated_remaining: result.estimated_remaining || null
+            };
+            this.response.type = 'application/json';
+            
+        } catch (error: any) {
+            console.error('Failed to check task status:', error);
+            
+            // 如果API调用失败，返回默认状态（可能任务还没有被Phosphorus处理）
+            this.response.body = {
+                success: false,
+                task_id: task_id,
+                status: 'processing',
+                progress: 0,
+                message: '任务正在处理中，请稍候...',
+                completed: false,
+                result_url: null,
+                error: error.message
+            };
+            this.response.type = 'application/json';
+        }
+    }
 }
 
 export default definePlugin({
@@ -782,6 +905,7 @@ export default definePlugin({
         ctx.Route('plagiarism_problem_detail', '/plagiarism/contest/:contest_id/:problem_id', ProblemPlagiarismDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_new_task', '/plagiarism/new', NewPlagiarismTaskHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_api_problems', '/plagiarism/api/problems', PlagiarismApiHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('plagiarism_task_status', '/plagiarism/api/task/:task_id/status', TaskStatusHandler, PRIV.PRIV_EDIT_SYSTEM);
         
         // Add to navigation menu
         ctx.injectUI('UserDropdown', 'Userinfo', {
