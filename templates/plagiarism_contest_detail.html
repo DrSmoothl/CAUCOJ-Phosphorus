@@ -739,10 +739,11 @@
 </div>
 
 <script>
-// 查看题目详情
-function viewProblemDetail(contestId, problemId) {
+// 确保函数在全局作用域中定义
+window.viewProblemDetail = function(contestId, problemId) {
+  console.log('viewProblemDetail called with:', contestId, problemId);
   window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
-}
+};
 
 // 下载报告
 function downloadReport() {
@@ -785,11 +786,6 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
-// 查看题目详情
-function viewProblemDetail(contestId, problemId) {
-  window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
-}
-
 // 键盘快捷键
 document.addEventListener('keydown', function(e) {
   // Escape 返回列表
@@ -812,6 +808,13 @@ document.addEventListener('keydown', function(e) {
 
 // 页面加载完成后的处理
 document.addEventListener('DOMContentLoaded', function() {
+  // 检查函数是否已定义
+  if (typeof window.viewProblemDetail === 'function') {
+    console.log('viewProblemDetail function is defined');
+  } else {
+    console.error('viewProblemDetail function is not defined!');
+  }
+  
   // 为题目卡片添加键盘导航
   const problemCards = document.querySelectorAll('.problem-card');
   problemCards.forEach((card, index) => {
