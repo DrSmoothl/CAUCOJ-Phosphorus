@@ -825,7 +825,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function loadContests() {
   try {
     // 使用从后端传递的比赛数据
-    contests = {{ contests | tojson }} || [];
+    contests = {{ contests | dump }} || [];
   } catch (error) {
     console.error('Failed to load contests:', error);
     contests = [];
