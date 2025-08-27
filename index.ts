@@ -299,6 +299,7 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestInfo(contestId: string): Promise<any> {
         try {
+            // 首先尝试从查重结果API获取比赛信息
             const result = await makeApiRequest('/api/v1/contests/plagiarism');
             if (result.success) {
                 const contests = result.data || [];
@@ -310,6 +311,43 @@ class ContestPlagiarismDetailHandler extends Handler {
                     return contest;
                 }
             }
+            
+            // 如果在查重结果中找不到，直接从数据库查找比赛
+            console.log(`[Phosphorus] Contest ${contestId} not found in plagiarism results, trying direct database lookup`);
+            
+            let contestDoc: any = null;
+            
+            // 尝试遍历查找匹配的ID（最通用的方法）
+            console.log('[Phosphorus] Searching for contest by iterating all contests...');
+            const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+            
+            // 尝试多种匹配方式
+            contestDoc = allContests.find(doc => {
+                const docId = doc._id;
+                return docId.toString() === contestId.toString() || 
+                       docId === contestId ||
+                       (typeof docId === 'object' && docId.toHexString && docId.toHexString() === contestId);
+            });
+            
+            if (contestDoc) {
+                console.log(`[Phosphorus] Found contest: ${contestDoc.title || 'Unknown'} with ID: ${contestDoc._id}`);
+            } else {
+                console.log(`[Phosphorus] Contest ${contestId} not found in database`);
+            }
+            
+            if (contestDoc) {
+                return {
+                    id: contestDoc._id.toString(),
+                    title: contestDoc.title || `比赛 ${contestDoc._id}`,
+                    description: contestDoc.content || '',
+                    begin_at: contestDoc.beginAt ? new Date(contestDoc.beginAt) : null,
+                    end_at: contestDoc.endAt ? new Date(contestDoc.endAt) : null,
+                    total_problems: Array.isArray(contestDoc.pids) ? contestDoc.pids.length : 0,
+                    checked_problems: 0, // 将通过其他方式计算
+                    last_check_at: null
+                };
+            }
+            
         } catch (error) {
             console.error('Failed to get contest info:', error);
         }
