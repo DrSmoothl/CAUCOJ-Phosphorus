@@ -785,6 +785,11 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
+// 查看题目详情
+function viewProblemDetail(contestId, problemId) {
+  window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
+}
+
 // 键盘快捷键
 document.addEventListener('keydown', function(e) {
   // Escape 返回列表
