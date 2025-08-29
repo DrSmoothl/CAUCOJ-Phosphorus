@@ -632,12 +632,23 @@ class ProblemPlagiarismDetailHandler extends Handler {
                 throw new NotFoundError(`Contest ${contest_id} not found`);
             }
             
-            // Get plagiarism results for this specific problem
-            const plagiarismResult = await db.collection('document').findOne({
+            // Get plagiarism results for this specific problem (get the latest one)
+            console.log(`[Phosphorus] Querying plagiarism results for contest ${contest_id}, problem ${problem_id}`);
+            const plagiarismResult = await (db as any).collection('check_plagiarism_results').findOne({
                 contest_id: contest_id,
-                problem_id: parseInt(problem_id),
-                docType: 'plagiarism_result'
+                problem_id: parseInt(problem_id)
+            }, {
+                sort: { created_at: -1 } // 获取最新的查重结果
             });
+            
+            console.log(`[Phosphorus] Plagiarism result found:`, !!plagiarismResult);
+            if (plagiarismResult) {
+                console.log(`[Phosphorus] Result details:`, {
+                    analysis_id: plagiarismResult.analysis_id,
+                    total_submissions: plagiarismResult.total_submissions,
+                    created_at: plagiarismResult.created_at
+                });
+            }
             
             if (!plagiarismResult) {
                 console.log(`[Phosphorus] No plagiarism result found for contest ${contest_id}, problem ${problem_id}`);
