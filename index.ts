@@ -258,7 +258,7 @@ class ContestPlagiarismListHandler extends Handler {
                     
                     // 尝试从比赛集合获取详细信息
                     try {
-                        const contestDoc = await this.findContestById(contestId);
+                        const contestDoc = await this.getContestFromDatabase(contestId);
                         if (contestDoc) {
                             contestInfo.title = contestDoc.title || `比赛 ${contestId}`;
                             contestInfo.description = contestDoc.content || '';
@@ -312,43 +312,31 @@ class ContestPlagiarismListHandler extends Handler {
             this.response.body = { contests: [], error: error.message };
         }
     }
-    
-    private async findContestById(contestId: string): Promise<any | null> {
+
+    private async getContestFromDatabase(contestId: string): Promise<any> {
         try {
-            // 尝试多种方式查找比赛
-            let contestDoc: any = null;
+            const db = (global as any).Hydro.service.db;
             
-            // 首先尝试直接查询 (如果contestId是有效的ObjectId格式)
+            // 直接查询比赛
             if (contestId.length === 24 && /^[0-9a-fA-F]{24}$/.test(contestId)) {
                 try {
-                    // 尝试直接用字符串查询，让MongoDB自动转换
-                    contestDoc = await db.collection('document').findOne({ 
+                    return await db.collection('document').findOne({ 
                         _id: contestId, 
                         docType: 30 
                     });
                 } catch (e) {
-                    // 如果直接查询失败，继续其他方法
-                    console.log(`[Phosphorus] Direct query failed for ${contestId}, trying alternative methods`);
+                    console.log(`[Phosphorus] Direct query failed for ${contestId}`);
                 }
             }
             
-            // 如果直接查询失败，遍历所有比赛找匹配
-            if (!contestDoc) {
-                const allContests = await db.collection('document').find({ docType: 30 }).toArray();
-                
-                contestDoc = allContests.find(doc => {
-                    const docId = doc._id;
-                    // 多种匹配方式
-                    return docId.toString() === contestId.toString() || 
-                           docId === contestId ||
-                           // 如果docId有toHexString方法(ObjectId)
-                           (docId && typeof docId.toHexString === 'function' && docId.toHexString() === contestId) ||
-                           // 也检查docId字段
-                           (doc.docId && doc.docId.toString() === contestId.toString());
-                });
-            }
-            
-            return contestDoc;
+            // 遍历查找
+            const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+            return allContests.find(doc => {
+                const docId = doc._id;
+                return docId.toString() === contestId.toString() || 
+                       (docId && typeof docId.toHexString === 'function' && docId.toHexString() === contestId) ||
+                       (doc.docId && doc.docId.toString() === contestId.toString());
+            });
         } catch (error) {
             console.error(`[Phosphorus] Error finding contest by ID ${contestId}:`, error);
             return null;
@@ -399,22 +387,58 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestInfo(contestId: string): Promise<any> {
         try {
-            // 直接从数据库查找比赛，不依赖后端API
+            const db = (global as any).Hydro.service.db;
             console.log(`[Phosphorus] Looking up contest ${contestId} directly from database`);
             
             let contestDoc: any = null;
             
-            // 尝试遍历查找匹配的ID（最通用的方法）
-            console.log('[Phosphorus] Searching for contest by iterating all contests...');
-            const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+            // 首先尝试直接查询
+            if (contestId.length === 24 && /^[0-9a-fA-F]{24}$/.test(contestId)) {
+                try {
+                    contestDoc = await db.collection('document').findOne({ 
+                        _id: contestId, 
+                        docType: 30 
+                    });
+                    if (contestDoc) {
+                        console.log(`[Phosphorus] Found contest by direct query: ${contestDoc.title || 'Unknown'}`);
+                    }
+                } catch (e) {
+                    console.log(`[Phosphorus] Direct query failed: ${e}`);
+                }
+            }
             
-            // 尝试多种匹配方式
-            contestDoc = allContests.find(doc => {
-                const docId = doc._id;
-                return docId.toString() === contestId.toString() || 
-                       docId === contestId ||
-                       (typeof docId === 'object' && docId.toHexString && docId.toHexString() === contestId);
-            });
+            // 如果直接查询失败，遍历所有比赛找匹配
+            if (!contestDoc) {
+                console.log('[Phosphorus] Searching for contest by iterating all contests...');
+                const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+                
+                console.log(`[Phosphorus] Found ${allContests.length} contests in database`);
+                
+                // 调试：显示所有比赛ID
+                allContests.forEach((doc, index) => {
+                    if (index < 5) { // 只显示前5个避免日志过多
+                        console.log(`[Phosphorus] Contest ${index}: _id=${doc._id}, title=${doc.title}`);
+                    }
+                });
+                
+                // 尝试多种匹配方式
+                contestDoc = allContests.find(doc => {
+                    const docId = doc._id;
+                    const stringMatch = docId.toString() === contestId.toString();
+                    const hexMatch = docId && typeof docId.toHexString === 'function' && docId.toHexString() === contestId;
+                    const docIdMatch = doc.docId && doc.docId.toString() === contestId.toString();
+                    
+                    if (stringMatch || hexMatch || docIdMatch) {
+                        console.log(`[Phosphorus] Match found for ${contestId}: stringMatch=${stringMatch}, hexMatch=${hexMatch}, docIdMatch=${docIdMatch}`);
+                        return true;
+                    }
+                    return false;
+                });
+                
+                if (contestDoc) {
+                    console.log(`[Phosphorus] Found contest by iteration: ${contestDoc.title || 'Unknown'} with ID: ${contestDoc._id}`);
+                }
+            }
             
             if (contestDoc) {
                 console.log(`[Phosphorus] Found contest: ${contestDoc.title || 'Unknown'} with ID: ${contestDoc._id}`);
