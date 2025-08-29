@@ -314,20 +314,45 @@ class ContestPlagiarismListHandler extends Handler {
     }
     
     private async findContestById(contestId: string): Promise<any | null> {
-        // 尝试多种方式查找比赛
-        let contestDoc: any = null;
-        
-        // 遍历查找匹配的ID（最通用的方法）
-        const allContests = await db.collection('document').find({ docType: 30 }).toArray();
-        
-        contestDoc = allContests.find(doc => {
-            const docId = doc._id;
-            return docId.toString() === contestId.toString() || 
-                   docId === contestId ||
-                   (typeof docId === 'object' && docId.toHexString && docId.toHexString() === contestId);
-        });
-        
-        return contestDoc;
+        try {
+            // 尝试多种方式查找比赛
+            let contestDoc: any = null;
+            
+            // 首先尝试直接查询 (如果contestId是有效的ObjectId格式)
+            if (contestId.length === 24 && /^[0-9a-fA-F]{24}$/.test(contestId)) {
+                try {
+                    // 尝试直接用字符串查询，让MongoDB自动转换
+                    contestDoc = await db.collection('document').findOne({ 
+                        _id: contestId, 
+                        docType: 30 
+                    });
+                } catch (e) {
+                    // 如果直接查询失败，继续其他方法
+                    console.log(`[Phosphorus] Direct query failed for ${contestId}, trying alternative methods`);
+                }
+            }
+            
+            // 如果直接查询失败，遍历所有比赛找匹配
+            if (!contestDoc) {
+                const allContests = await db.collection('document').find({ docType: 30 }).toArray();
+                
+                contestDoc = allContests.find(doc => {
+                    const docId = doc._id;
+                    // 多种匹配方式
+                    return docId.toString() === contestId.toString() || 
+                           docId === contestId ||
+                           // 如果docId有toHexString方法(ObjectId)
+                           (docId && typeof docId.toHexString === 'function' && docId.toHexString() === contestId) ||
+                           // 也检查docId字段
+                           (doc.docId && doc.docId.toString() === contestId.toString());
+                });
+            }
+            
+            return contestDoc;
+        } catch (error) {
+            console.error(`[Phosphorus] Error finding contest by ID ${contestId}:`, error);
+            return null;
+        }
     }
 }
 
@@ -520,6 +545,18 @@ class ContestPlagiarismDetailHandler extends Handler {
                 problem.checked_submissions = result.total_submissions - (result.failed_submissions?.length || 0);
                 problem.last_check_at = result.created_at;
                 
+                // 计算最高相似度和相似对数量
+                problem.high_similarity_pairs = result.high_similarity_pairs?.length || 0;
+                let maxSimilarity = 0;
+                if (result.high_similarity_pairs && result.high_similarity_pairs.length > 0) {
+                    result.high_similarity_pairs.forEach((pair: any) => {
+                        const avgSim = pair.similarities?.AVG || 0;
+                        const maxSim = pair.similarities?.MAX || 0;
+                        maxSimilarity = Math.max(maxSimilarity, avgSim, maxSim);
+                    });
+                }
+                problem.max_similarity = maxSimilarity;
+                
                 // 从high_similarity_pairs中提取语言信息（如果可能）
                 if (result.high_similarity_pairs && result.high_similarity_pairs.length > 0) {
                     // 这里可以根据submission名称推断语言，但数据结构中没有直接的语言信息
@@ -708,26 +745,31 @@ class ProblemPlagiarismDetailHandler extends Handler {
             const documentColl = db.collection('document');
             let contest: any = null;
             
-            // 尝试多种查询方式（参照其他插件的做法）
-            try {
-                // 方式1: 直接查询
-                contest = await documentColl.findOne({ 
-                    _id: contestId,
-                    docType: 30 // 比赛文档类型
-                });
-            } catch (error) {
-                // 查询失败，继续尝试其他方式
-                console.log(`[Phosphorus] Direct query failed for contest ${contestId}, trying alternative methods`);
+            // 首先尝试直接查询 (如果contestId是有效的ObjectId格式)
+            if (contestId.length === 24 && /^[0-9a-fA-F]{24}$/.test(contestId)) {
+                try {
+                    // 尝试直接用字符串查询，让MongoDB自动转换
+                    contest = await documentColl.findOne({ 
+                        _id: contestId,
+                        docType: 30 // 比赛文档类型
+                    });
+                } catch (error) {
+                    // 如果直接查询失败，继续其他方法
+                    console.log(`[Phosphorus] Direct query failed for contest ${contestId}, trying alternative methods`);
+                }
             }
             
-            // 方式2: 如果直接查询失败，尝试字符串匹配
+            // 如果直接查询失败，尝试遍历匹配
             if (!contest) {
                 try {
                     const allContests = await documentColl.find({ docType: 30 }).toArray();
                     
-                    // 尝试字符串匹配
+                    // 尝试多种匹配方式
                     contest = allContests.find((c: any) => {
-                        return c._id.toString() === contestId.toString();
+                        const docId = c._id;
+                        return docId.toString() === contestId.toString() ||
+                               (docId && typeof docId.toHexString === 'function' && docId.toHexString() === contestId) ||
+                               (c.docId && c.docId.toString() === contestId.toString());
                     }) || null;
                 } catch (error) {
                     console.error(`[Phosphorus] Alternative query also failed for contest ${contestId}:`, error);

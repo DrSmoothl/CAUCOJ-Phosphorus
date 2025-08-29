@@ -823,12 +823,28 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // 为题目卡片添加点击事件监听器
   const problemCards = document.querySelectorAll('.problem-card');
-  problemCards.forEach((card) => {
-    card.addEventListener('click', function() {
+  console.log(`[Phosphorus] Found ${problemCards.length} problem cards`);
+  
+  problemCards.forEach((card, index) => {
+    const contestId = card.getAttribute('data-contest-id');
+    const problemId = card.getAttribute('data-problem-id');
+    console.log(`[Phosphorus] Card ${index}: contestId=${contestId}, problemId=${problemId}`);
+    
+    card.addEventListener('click', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      
       const contestId = card.getAttribute('data-contest-id');
       const problemId = card.getAttribute('data-problem-id');
-      console.log('Problem card clicked:', contestId, problemId);
-      window.location.href = `/plagiarism/contest/${contestId}/${problemId}`;
+      console.log('[Phosphorus] Problem card clicked:', { contestId, problemId, event });
+      
+      if (contestId && problemId) {
+        const targetUrl = `/plagiarism/contest/${contestId}/${problemId}`;
+        console.log('[Phosphorus] Navigating to:', targetUrl);
+        window.location.href = targetUrl;
+      } else {
+        console.error('[Phosphorus] Missing data attributes:', { contestId, problemId });
+      }
     });
     
     // 添加键盘导航

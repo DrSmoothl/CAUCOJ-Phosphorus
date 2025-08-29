@@ -527,7 +527,7 @@ function startAutoRefresh() {
   const refreshIndicator = document.getElementById('refreshIndicator');
   const countdownElement = document.getElementById('countdown');
   
-  if (autoRefreshCheckbox.checked) {
+  if (autoRefreshCheckbox.checked && !taskStatusChecked) {
     refreshIndicator.style.display = 'block';
     
     countdownInterval = setInterval(() => {
@@ -535,12 +535,22 @@ function startAutoRefresh() {
       countdownElement.textContent = countdown;
       
       if (countdown <= 0) {
-        window.location.reload();
+        // 在刷新前检查一次任务状态，避免不必要的刷新
+        checkTaskStatus().then(() => {
+          if (!taskStatusChecked) {
+            window.location.reload();
+          }
+        });
       }
     }, 1000);
     
     refreshInterval = setTimeout(() => {
-      window.location.reload();
+      // 在刷新前再次检查任务状态
+      checkTaskStatus().then(() => {
+        if (!taskStatusChecked) {
+          window.location.reload();
+        }
+      });
     }, 60000);
   } else {
     refreshIndicator.style.display = 'none';
@@ -616,15 +626,22 @@ window.addEventListener('beforeunload', function() {
 });
 
 // 检查任务状态的函数（可以通过AJAX调用）
+let taskStatusChecked = false; // 防止重复检查
 async function checkTaskStatus() {
   try {
     const taskId = '{{ task_id }}';
-    if (!taskId) return;
+    if (!taskId || taskStatusChecked) return;
     
     const response = await fetch(`/plagiarism/api/task/${taskId}/status`);
     const data = await response.json();
     
     if (data.success && data.status === 'completed') {
+      taskStatusChecked = true; // 标记已处理
+      
+      // 停止所有定时器
+      clearInterval(countdownInterval);
+      clearTimeout(refreshInterval);
+      
       // 任务完成，显示通知并重定向
       if (document.getElementById('browserNotification').checked && 'Notification' in window && Notification.permission === 'granted') {
         new Notification('查重任务完成', {
@@ -633,17 +650,23 @@ async function checkTaskStatus() {
         });
       }
       
-      // 3秒后自动跳转到结果页面
-      setTimeout(() => {
-        window.location.href = `/plagiarism/contest/{{ contest_id }}`;
-      }, 3000);
-      
       // 更新页面状态
       document.querySelector('.waiting-text').textContent = '分析完成！';
       document.querySelector('.waiting-description').textContent = '正在跳转到结果页面...';
       document.querySelector('.estimated-time').textContent = '✅ 任务已完成';
       document.querySelector('.estimated-time').style.background = '#dcfce7';
       document.querySelector('.estimated-time').style.color = '#166534';
+      
+      // 隐藏自动刷新提示
+      const refreshIndicator = document.getElementById('refreshIndicator');
+      if (refreshIndicator) {
+        refreshIndicator.style.display = 'none';
+      }
+      
+      // 3秒后自动跳转到结果页面
+      setTimeout(() => {
+        window.location.href = `/plagiarism/contest/{{ contest_id }}`;
+      }, 3000);
     }
   } catch (error) {
     console.warn('检查任务状态失败:', error);
