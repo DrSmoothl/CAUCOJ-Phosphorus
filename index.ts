@@ -448,8 +448,7 @@ class ContestPlagiarismDetailHandler extends Handler {
                 let lastCheckAt: Date | null = null;
                 
                 try {
-                    const db_raw = db as any;
-                    const plagiarismResults = await db_raw.db.collection('check_plagiarism_results').find({
+                    const plagiarismResults = await db.collection('check_plagiarism_results').find({
                         contest_id: contestId
                     }).toArray();
                     
@@ -490,6 +489,8 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestProblems(contestId: string): Promise<any[]> {
         try {
+            const db = (global as any).Hydro.service.db;
+            
             // 直接从数据库查询查重结果
             const plagiarismResults = await db.collection('document').find({
                 contest_id: contestId,
@@ -500,9 +501,7 @@ class ContestPlagiarismDetailHandler extends Handler {
             let results = plagiarismResults;
             if (results.length === 0) {
                 try {
-                    // 直接访问MongoDB集合
-                    const db_raw = db as any;
-                    results = await db_raw.db.collection('check_plagiarism_results').find({
+                    results = await db.collection('check_plagiarism_results').find({
                         contest_id: contestId
                     }).toArray();
                 } catch (error) {
@@ -963,62 +962,34 @@ class PlagiarismApiHandler extends Handler {
             this.response.type = 'application/json';
         }
     }
-    
+
     private async getContestProblems(contestId: string): Promise<any[]> {
         try {
-            console.log('Getting problems for contest ID (string):', contestId);
+            const db = (global as any).Hydro.service.db;
             
-            // 使用灵活的查询方式查找比赛文档
-            let contestDoc: any = null;
-            
-            // 方式1: 直接使用传入的ID查询
-            try {
-                contestDoc = await db.collection('document').findOne({ 
-                    _id: contestId,
-                    docType: 30 
-                });
-            } catch (error) {
-                // 查询失败，继续尝试其他方式
-            }
-            
-            // 方式2: 如果直接查询失败，尝试字符串匹配
-            if (!contestDoc) {
-                try {
-                    const allContests = await db.collection('document').find({ docType: 30 }).toArray();
-                    contestDoc = allContests.find(c => c._id.toString() === contestId.toString()) || null;
-                } catch (error) {
-                    // 查询失败
-                }
-            }
-            
-            console.log('Contest document found:', !!contestDoc);
-            console.log('Contest pids:', contestDoc?.pids);
+            // 查找比赛文档
+            const contestDoc = await db.collection('document').findOne({ 
+                _id: contestId,
+                docType: 30 
+            });
             
             if (!contestDoc || !contestDoc.pids) {
                 return [];
             }
             
-            // 获取比赛中的题目ID列表
+            // 获取题目信息
             const problemIds = contestDoc.pids.map((pid: any) => parseInt(pid.toString()));
-            console.log('Problem IDs to query:', problemIds);
-            
-            // 查询这些题目的详细信息
             const problemDocs = await db.collection('document').find({
-                docType: 10, // 10 是题目文档类型
+                docType: 10,
                 docId: { $in: problemIds }
             }).toArray();
-            
-            console.log('Problem documents found:', problemDocs.length);
             
             return problemDocs.map(doc => ({
                 id: doc.docId,
                 title: doc.title || `题目 ${doc.docId}`,
                 total_submissions: doc.nSubmit || 0,
                 accepted_submissions: doc.nAccept || 0,
-                difficulty: doc.difficulty || 0,
-                tags: doc.tag || [],
-                pid: doc.pid || doc.docId.toString(),
-                can_analyze: (doc.nSubmit || 0) >= 5 // 至少5个提交才能分析
+                can_analyze: (doc.nSubmit || 0) >= 5
             }));
         } catch (error) {
             console.error('Failed to get contest problems:', error);
