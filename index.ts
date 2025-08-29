@@ -8,7 +8,7 @@ import {
 
 // Plugin configuration
 const PLUGIN_NAME = 'phosphorus-plagiarism';
-const PLUGIN_VERSION = '1.0.0';
+const PLUGIN_VERSION = '2.0.0'; // Updated for enhanced features
 
 // Get Phosphorus API base URL from system settings
 function getPhosphorusApiBase(): string {
@@ -18,19 +18,65 @@ function getPhosphorusApiBase(): string {
 }
 
 /**
+ * Enhanced API request helper with better error handling
+ */
+async function makeEnhancedApiRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {
+    const apiBase = getPhosphorusApiBase();
+    const url = `${apiBase}${endpoint}`;
+    
+    console.log(`[Enhanced Phosphorus] Making API request: ${method} ${url}`);
+    
+    const options: RequestInit = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Version': '2.0',
+            'X-Client': 'hydro-enhanced-plugin'
+        },
+    };
+    
+    if (data && method !== 'GET') {
+        options.body = JSON.stringify(data);
+        console.log(`[Enhanced Phosphorus] Request body:`, data);
+    }
+    
+    try {
+        const response = await fetch(url, options);
+        console.log(`[Enhanced Phosphorus] Response status: ${response.status} ${response.statusText}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error(`[Enhanced Phosphorus] Error response:`, errorData);
+            throw new Error(`HTTP ${response.status}: ${errorData.detail || response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log(`[Enhanced Phosphorus] Response data:`, result);
+        return result;
+    } catch (error: any) {
+        console.error(`[Enhanced Phosphorus] API request failed:`, error);
+        throw new Error(`Enhanced API request failed: ${error.message}`);
+    }
+}
+
+/**
  * Make HTTP request to Phosphorus API
+ */
+/**
+ * 重构后的API请求函数 - 增强错误处理、重试机制和性能优化
  */
 async function makeApiRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {
     const apiBase = getPhosphorusApiBase();
     const url = `${apiBase}${endpoint}`;
     
     console.log(`[Phosphorus] Making API request: ${method} ${url}`);
-    console.log(`[Phosphorus] API Base URL: ${apiBase}`);
     
     const options: RequestInit = {
         method,
         headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Client-Version': PLUGIN_VERSION,
         },
     };
     
@@ -39,53 +85,92 @@ async function makeApiRequest(endpoint: string, method: string = 'GET', data?: a
         console.log(`[Phosphorus] Request body:`, data);
     }
     
-    try {
-        const response = await fetch(url, options);
-        console.log(`[Phosphorus] Response status: ${response.status} ${response.statusText}`);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`[Phosphorus] Error response:`, errorText);
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // 重试机制
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            console.log(`[Phosphorus] Response status: ${response.status} ${response.statusText}`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[Phosphorus] Error response (attempt ${attempt}):`, errorText);
+                
+                // 如果是5xx错误且还有重试次数，继续重试
+                if (response.status >= 500 && attempt < maxRetries) {
+                    console.log(`[Phosphorus] Retrying request (attempt ${attempt + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // 递增延迟
+                    continue;
+                }
+                
+                throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
+            }
+            
+            const result = await response.json();
+            console.log(`[Phosphorus] Response data received successfully`);
+            return result;
+            
+        } catch (error: any) {
+            if (attempt === maxRetries) {
+                console.error(`[Phosphorus] API request failed after ${maxRetries} attempts:`, error);
+                throw new Error(`API请求失败: ${error.message}`);
+            }
+            
+            console.warn(`[Phosphorus] Request attempt ${attempt} failed, retrying...`, error.message);
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
-        
-        const result = await response.json();
-        console.log(`[Phosphorus] Response data:`, result);
-        return result;
-    } catch (error: any) {
-        console.error(`[Phosphorus] API request failed:`, error);
-        throw new Error(`API request failed: ${error.message}`);
     }
 }
 
 /**
- * Plagiarism Main Page Handler - /plagiarism
+ * 重构后的查重主页处理器 - 改进数据展示和加载性能
  */
 class PlagiarismMainHandler extends Handler {
     async get() {
-        // Check permissions - use existing permission for contest management
+        // 检查权限
         this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
         
         try {
-            // Get system statistics
-            const stats = await this.getSystemStats();
-            const recentActivities = await this.getRecentActivities();
+            console.log('[Phosphorus] 重构版主页处理器开始执行');
+            
+            // 并行获取数据以提升性能
+            const [stats, recentActivities, systemHealth] = await Promise.all([
+                this.getEnhancedSystemStats(),
+                this.getRecentActivities(),
+                this.getSystemHealth()
+            ]);
             
             this.response.template = 'plagiarism_main.html';
             this.response.body = {
+                // 基础统计信息
                 total_contests: stats.total_contests || 0,
                 total_problems: stats.total_problems || 0,
                 total_submissions: stats.total_submissions || 0,
                 high_similarity_count: stats.high_similarity_count || 0,
+                
+                // 增强统计信息
                 contest_stats: stats.contest_stats || {},
                 language_stats: stats.language_stats || {},
                 history_stats: stats.history_stats || {},
-                recent_activities: recentActivities
+                
+                // 系统状态
+                system_health: systemHealth,
+                
+                // 最近活动
+                recent_activities: recentActivities,
+                
+                // 元数据
+                plugin_version: PLUGIN_VERSION,
+                last_updated: new Date().toISOString(),
+                
+                // 用户友好的展示数据
+                formatted_stats: this.formatStatsForDisplay(stats)
             };
         } catch (error: any) {
+            console.error('[Phosphorus] 主页处理器执行失败:', error);
             this.response.template = 'plagiarism_main.html';
             this.response.body = {
-                error: error.message,
+                error: `加载失败: ${error.message}`,
                 total_contests: 0,
                 total_problems: 0,
                 total_submissions: 0,
@@ -93,12 +178,14 @@ class PlagiarismMainHandler extends Handler {
                 contest_stats: {},
                 language_stats: {},
                 history_stats: {},
-                recent_activities: []
+                recent_activities: [],
+                plugin_version: PLUGIN_VERSION,
+                system_health: { status: 'error', message: error.message }
             };
         }
     }
     
-    private async getSystemStats(): Promise<any> {
+    private async getEnhancedSystemStats(): Promise<any> {
         try {
             const result = await makeApiRequest('/api/v1/contests/plagiarism');
             
@@ -681,7 +768,8 @@ class ProblemPlagiarismDetailHandler extends Handler {
             this.response.body = {
                 contest,
                 problem: problemData,
-                plagiarism_result: plagiarismResult
+                plagiarism_result: plagiarismResult,
+                enhanced_url: `/plagiarism/enhanced/contest/${contest_id}/problem/${problem_id}`
             };
             
         } catch (error: any) {
@@ -1262,11 +1350,124 @@ class TaskStatusHandler extends Handler {
     }
 }
 
+/**
+ * Enhanced Problem Detail Handler - /plagiarism/enhanced/contest/{contest_id}/problem/{problem_id}
+ */
+class EnhancedProblemDetailHandler extends Handler {
+    async get(domainId: string, contest_id: string, problem_id: string) {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        try {
+            const problemData = await this.getEnhancedProblemData(contest_id, parseInt(problem_id));
+            const problem = await this.getProblemInfo(contest_id, parseInt(problem_id));
+            
+            this.response.template = 'enhanced_plagiarism_detail.html';
+            this.response.body = {
+                problem,
+                plagiarism_data: problemData,
+                contest_id,
+                problem_id: parseInt(problem_id)
+            };
+        } catch (error: any) {
+            console.error('[Enhanced Problem Detail] Error:', error);
+            
+            if (error.message.includes('404')) {
+                throw new NotFoundError('Problem plagiarism data not found');
+            }
+            
+            this.response.template = 'enhanced_plagiarism_detail.html';
+            this.response.body = {
+                error: error.message,
+                problem: { title: `Problem ${problem_id}`, id: problem_id },
+                plagiarism_data: null,
+                contest_id,
+                problem_id: parseInt(problem_id)
+            };
+        }
+    }
+    
+    private async getEnhancedProblemData(contest_id: string, problem_id: number): Promise<any> {
+        try {
+            const response = await makeEnhancedApiRequest(
+                `/api/v1/jplag/enhanced/problem/${contest_id}/${problem_id}`
+            );
+            return response.data;
+        } catch (error) {
+            console.error(`[Enhanced Problem Data] Failed to get data for ${contest_id}/${problem_id}:`, error);
+            throw error;
+        }
+    }
+    
+    private async getProblemInfo(contest_id: string, problem_id: number): Promise<any> {
+        try {
+            // Try to get problem info from existing problem handler logic
+            // For now, return enhanced mock data
+            return {
+                id: problem_id,
+                title: `Enhanced Problem ${problem_id}`,
+                description: `Enhanced analysis for problem ${problem_id} in contest ${contest_id}`
+            };
+        } catch (error) {
+            console.error('[Enhanced Problem Info] Failed to get problem info:', error);
+            return {
+                id: problem_id,
+                title: `Problem ${problem_id}`,
+                description: `Problem ${problem_id} description`
+            };
+        }
+    }
+}
+
+/**
+ * Enhanced API Proxy Handler for real-time features
+ */
+class EnhancedApiProxyHandler extends Handler {
+    async get(domainId: string, ...args: string[]) {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        const endpoint = args.join('/');
+        const queryParams = new URLSearchParams(this.request.query as any).toString();
+        const fullEndpoint = queryParams ? `${endpoint}?${queryParams}` : endpoint;
+        
+        try {
+            const response = await makeEnhancedApiRequest(`/api/v1/jplag/enhanced/${fullEndpoint}`);
+            this.response.body = response;
+            this.response.type = 'application/json';
+        } catch (error: any) {
+            console.error('[Enhanced API Proxy] Error:', error);
+            this.response.status = 500;
+            this.response.body = { error: error.message };
+            this.response.type = 'application/json';
+        }
+    }
+    
+    async post(domainId: string, ...args: string[]) {
+        this.checkPriv(PRIV.PRIV_EDIT_SYSTEM);
+        
+        const endpoint = args.join('/');
+        
+        try {
+            const response = await makeEnhancedApiRequest(
+                `/api/v1/jplag/enhanced/${endpoint}`,
+                'POST',
+                this.request.body
+            );
+            this.response.body = response;
+            this.response.type = 'application/json';
+        } catch (error: any) {
+            console.error('[Enhanced API Proxy POST] Error:', error);
+            this.response.status = 500;
+            this.response.body = { error: error.message };
+            this.response.type = 'application/json';
+        }
+    }
+}
+
 export default definePlugin({
     name: PLUGIN_NAME,
     
     apply(ctx: Context) {
-        // Register routes
+        // Register original routes
         ctx.Route('plagiarism_main', '/plagiarism', PlagiarismMainHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_contest_list', '/plagiarism/contest', ContestPlagiarismListHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_contest_detail', '/plagiarism/contest/:contest_id', ContestPlagiarismDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
@@ -1274,6 +1475,10 @@ export default definePlugin({
         ctx.Route('plagiarism_new_task', '/plagiarism/new', NewPlagiarismTaskHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_api_problems', '/plagiarism/api/problems', PlagiarismApiHandler, PRIV.PRIV_EDIT_SYSTEM);
         ctx.Route('plagiarism_task_status', '/plagiarism/api/task/:task_id/status', TaskStatusHandler, PRIV.PRIV_EDIT_SYSTEM);
+        
+        // Register enhanced routes
+        ctx.Route('enhanced_problem_detail', '/plagiarism/enhanced/contest/:contest_id/problem/:problem_id', EnhancedProblemDetailHandler, PRIV.PRIV_EDIT_SYSTEM);
+        ctx.Route('enhanced_api_proxy', '/plagiarism/enhanced/api/*', EnhancedApiProxyHandler, PRIV.PRIV_EDIT_SYSTEM);
         
         // Add to navigation menu
         ctx.injectUI('UserDropdown', 'Userinfo', {
@@ -1283,5 +1488,6 @@ export default definePlugin({
         }, PRIV.PRIV_EDIT_SYSTEM);
         
         console.log(`${PLUGIN_NAME} plugin loaded successfully`);
+        console.log('[Enhanced Routes] Registered enhanced plagiarism detection routes');
     }
 });
