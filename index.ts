@@ -315,8 +315,6 @@ class ContestPlagiarismListHandler extends Handler {
 
     private async getContestFromDatabase(contestId: string): Promise<any> {
         try {
-            const db = (global as any).Hydro.service.db;
-            
             // 直接查询比赛
             if (contestId.length === 24 && /^[0-9a-fA-F]{24}$/.test(contestId)) {
                 try {
@@ -387,7 +385,6 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestInfo(contestId: string): Promise<any> {
         try {
-            const db = (global as any).Hydro.service.db;
             console.log(`[Phosphorus] Looking up contest ${contestId} directly from database`);
             
             let contestDoc: any = null;
@@ -448,7 +445,7 @@ class ContestPlagiarismDetailHandler extends Handler {
                 let lastCheckAt: Date | null = null;
                 
                 try {
-                    const plagiarismResults = await db.collection('check_plagiarism_results').find({
+                    const plagiarismResults = await (db as any).collection('check_plagiarism_results').find({
                         contest_id: contestId
                     }).toArray();
                     
@@ -489,8 +486,6 @@ class ContestPlagiarismDetailHandler extends Handler {
     
     private async getContestProblems(contestId: string): Promise<any[]> {
         try {
-            const db = (global as any).Hydro.service.db;
-            
             // 直接从数据库查询查重结果
             const plagiarismResults = await db.collection('document').find({
                 contest_id: contestId,
@@ -501,7 +496,7 @@ class ContestPlagiarismDetailHandler extends Handler {
             let results = plagiarismResults;
             if (results.length === 0) {
                 try {
-                    results = await db.collection('check_plagiarism_results').find({
+                    results = await (db as any).collection('check_plagiarism_results').find({
                         contest_id: contestId
                     }).toArray();
                 } catch (error) {
@@ -638,10 +633,10 @@ class ProblemPlagiarismDetailHandler extends Handler {
             }
             
             // Get plagiarism results for this specific problem
-            const db = (global as any).Hydro.service.db;
-            const plagiarismResult = await db.collection('check_plagiarism_results').findOne({
+            const plagiarismResult = await db.collection('document').findOne({
                 contest_id: contest_id,
-                problem_id: parseInt(problem_id)
+                problem_id: parseInt(problem_id),
+                docType: 'plagiarism_result'
             });
             
             if (!plagiarismResult) {
@@ -764,7 +759,6 @@ class ProblemPlagiarismDetailHandler extends Handler {
     
     private async findContestById(contestId: string): Promise<any | null> {
         try {
-            const db = (global as any).Hydro.service.db;
             const documentColl = db.collection('document');
             let contest: any = null;
             
@@ -965,8 +959,6 @@ class PlagiarismApiHandler extends Handler {
 
     private async getContestProblems(contestId: string): Promise<any[]> {
         try {
-            const db = (global as any).Hydro.service.db;
-            
             // 查找比赛文档
             const contestDoc = await db.collection('document').findOne({ 
                 _id: contestId,
