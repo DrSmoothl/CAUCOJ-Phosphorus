@@ -1,0 +1,974 @@
+{% extends "layout/basic.html" %}
+{% block title %}{{ problem.title or ('题目 ' + problem.id|string) }} - 增强查重详情{% endblock %}
+
+{% block content %}
+<style>
+/* Enhanced Problem Detail Page Styles */
+.enhanced-problem-detail {
+  max-width: 1600px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+/* Enhanced Header */
+.enhanced-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px 30px;
+  border-radius: 20px;
+  margin-bottom: 30px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(102, 126, 234, 0.3);
+}
+
+.enhanced-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 30px,
+    rgba(255,255,255,0.1) 30px,
+    rgba(255,255,255,0.1) 60px
+  );
+  animation: headerFlow 20s linear infinite;
+}
+
+@keyframes headerFlow {
+  0% { transform: translateX(-100px) translateY(-100px) rotate(0deg); }
+  100% { transform: translateX(100px) translateY(100px) rotate(360deg); }
+}
+
+.header-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 30px;
+  align-items: start;
+}
+
+.header-info h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.header-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.stat-item {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 15px;
+  border-radius: 12px;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  display: block;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-top: 5px;
+}
+
+/* Enhanced Analysis Dashboard */
+.analysis-dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.dashboard-card {
+  background: white;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.card-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+  color: white;
+  font-size: 1.2rem;
+}
+
+.card-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0;
+  color: #1f2937;
+}
+
+/* Similarity Distribution Chart */
+.similarity-chart {
+  position: relative;
+  height: 200px;
+  margin: 20px 0;
+}
+
+.chart-bars {
+  display: flex;
+  align-items: end;
+  height: 150px;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.chart-bar {
+  flex: 1;
+  background: linear-gradient(to top, #667eea, #764ba2);
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  min-height: 10px;
+  transition: all 0.3s ease;
+}
+
+.chart-bar:hover {
+  transform: scaleY(1.05);
+  filter: brightness(1.1);
+}
+
+.chart-label {
+  position: absolute;
+  bottom: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-align: center;
+  width: 100%;
+}
+
+.chart-value {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+/* Cluster Analysis */
+.cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.cluster-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.cluster-card.high-risk {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2, #ffffff);
+}
+
+.cluster-card.medium-risk {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.cluster-card.low-risk {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #ecfdf5, #ffffff);
+}
+
+.cluster-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.cluster-index {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.risk-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-badge.high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.risk-badge.medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.risk-badge.low {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.cluster-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.metric-item {
+  text-align: center;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+}
+
+.metric-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.cluster-members {
+  margin-top: 15px;
+}
+
+.member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.member-tag {
+  background: #f3f4f6;
+  color: #374151;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* Comparison Results */
+.comparison-section {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.comparison-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.comparison-card:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.1);
+}
+
+.comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.submission-info {
+  flex: 1;
+}
+
+.submission-name {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 5px;
+}
+
+.submission-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.similarity-score {
+  text-align: right;
+}
+
+.score-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.score-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.comparison-preview {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 15px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  max-height: 120px;
+  overflow: hidden;
+  position: relative;
+}
+
+.comparison-preview::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(transparent, #f9fafb);
+}
+
+/* Code Highlighting */
+.highlighted-code {
+  background: #fff5f5;
+  border-left: 4px solid #ef4444;
+  margin: 2px 0;
+  padding: 2px 4px;
+}
+
+/* Interactive Elements */
+.interactive-controls {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.control-label {
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.select-input, .slider-input {
+  padding: 8px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: border-color 0.3s ease;
+}
+
+.select-input:focus, .slider-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 2px solid #e5e7eb;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+/* Loading States */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .analysis-dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .enhanced-problem-detail {
+    padding: 0 10px;
+  }
+  
+  .header-content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .header-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .interactive-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+</style>
+
+<div class="enhanced-problem-detail">
+  <!-- Enhanced Header -->
+  <div class="enhanced-header fade-in-up">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>{{ problem.title or ('题目 ' + problem.id|string) }}</h1>
+        <p>增强查重分析详情</p>
+        <div class="header-stats">
+          <div class="stat-item">
+            <span class="stat-value" id="total-submissions">{{ plagiarism_data.total_submissions or 0 }}</span>
+            <span class="stat-label">总提交数</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="high-similarity-count">{{ plagiarism_data.high_similarity_count or 0 }}</span>
+            <span class="stat-label">高相似度对</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="max-similarity">{{ "%.1f%%" | format(plagiarism_data.max_similarity * 100) if plagiarism_data.max_similarity else "0%" }}</span>
+            <span class="stat-label">最高相似度</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="cluster-count">{{ plagiarism_data.clusters|length if plagiarism_data.clusters else 0 }}</span>
+            <span class="stat-label">集群数量</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Controls -->
+  <div class="comparison-section fade-in-up">
+    <div class="interactive-controls">
+      <div class="control-group">
+        <label class="control-label">相似度阈值:</label>
+        <input type="range" class="slider-input" id="similarity-threshold" min="0" max="100" value="70" />
+        <span id="threshold-value">70%</span>
+      </div>
+      <div class="control-group">
+        <label class="control-label">排序方式:</label>
+        <select class="select-input" id="sort-method">
+          <option value="similarity">相似度</option>
+          <option value="cluster">集群大小</option>
+          <option value="risk">风险等级</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label class="control-label">显示模式:</label>
+        <select class="select-input" id="display-mode">
+          <option value="grid">网格视图</option>
+          <option value="list">列表视图</option>
+          <option value="timeline">时间线</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      <button class="btn btn-primary" onclick="exportReport()">
+        <span>📊</span> 导出报告
+      </button>
+      <button class="btn btn-secondary" onclick="refreshAnalysis()">
+        <span>🔄</span> 刷新分析
+      </button>
+      <button class="btn btn-secondary" onclick="showAdvancedSettings()">
+        <span>⚙️</span> 高级设置
+      </button>
+    </div>
+  </div>
+
+  <!-- Analysis Dashboard -->
+  <div class="analysis-dashboard fade-in-up">
+    <!-- Similarity Distribution -->
+    <div class="dashboard-card">
+      <div class="card-header">
+        <div class="card-icon">📊</div>
+        <h3 class="card-title">相似度分布</h3>
+      </div>
+      <div class="similarity-chart">
+        <div class="chart-bars" id="similarity-chart">
+          <!-- Dynamic chart will be generated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk Analysis -->
+    <div class="dashboard-card">
+      <div class="card-header">
+        <div class="card-icon">⚠️</div>
+        <h3 class="card-title">风险分析</h3>
+      </div>
+      <div id="risk-analysis">
+        <!-- Dynamic risk analysis will be generated here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Cluster Analysis Section -->
+  {% if plagiarism_data.clusters %}
+  <div class="comparison-section fade-in-up">
+    <div class="card-header">
+      <div class="card-icon">🔗</div>
+      <h3 class="card-title">集群分析</h3>
+    </div>
+    <div class="cluster-grid" id="cluster-grid">
+      {% for cluster in plagiarism_data.clusters %}
+      <div class="cluster-card {{ 'high-risk' if cluster.average_similarity > 0.8 else 'medium-risk' if cluster.average_similarity > 0.5 else 'low-risk' }}">
+        <div class="cluster-header">
+          <span class="cluster-index">集群 #{{ cluster.index }}</span>
+          <span class="risk-badge {{ 'high' if cluster.average_similarity > 0.8 else 'medium' if cluster.average_similarity > 0.5 else 'low' }}">
+            {{ '高风险' if cluster.average_similarity > 0.8 else '中风险' if cluster.average_similarity > 0.5 else '低风险' }}
+          </span>
+        </div>
+        <div class="cluster-metrics">
+          <div class="metric-item">
+            <div class="metric-value">{{ cluster.size }}</div>
+            <div class="metric-label">成员数</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value">{{ "%.1f%%" | format(cluster.average_similarity * 100) }}</div>
+            <div class="metric-label">平均相似度</div>
+          </div>
+        </div>
+        <div class="cluster-members">
+          <strong>成员列表:</strong>
+          <div class="member-list">
+            {% for member in cluster.members %}
+            <span class="member-tag">{{ member }}</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Detailed Comparisons -->
+  {% if plagiarism_data.top_comparisons %}
+  <div class="comparison-section fade-in-up">
+    <div class="card-header">
+      <div class="card-icon">🔍</div>
+      <h3 class="card-title">详细比较结果</h3>
+    </div>
+    <div class="comparison-grid" id="comparison-grid">
+      {% for comparison in plagiarism_data.top_comparisons %}
+      <div class="comparison-card" onclick="showDetailedComparison('{{ comparison.first_submission }}', '{{ comparison.second_submission }}')">
+        <div class="comparison-header">
+          <div class="submission-info">
+            <div class="submission-name">{{ comparison.first_submission }} vs {{ comparison.second_submission }}</div>
+            <div class="submission-meta">匹配数: {{ comparison.matches|length if comparison.matches else 0 }}</div>
+          </div>
+          <div class="similarity-score">
+            <div class="score-value">{{ "%.1f%%" | format(comparison.similarity * 100) }}</div>
+            <div class="score-label">相似度</div>
+          </div>
+        </div>
+        {% if comparison.matches and comparison.matches|length > 0 %}
+        <div class="comparison-preview">
+          {% for match in comparison.matches[:3] %}
+          <div class="highlighted-code">{{ match.first_code_fragment[:50] }}...</div>
+          {% endfor %}
+          {% if comparison.matches|length > 3 %}
+          <div style="text-align: center; color: #6b7280; margin-top: 10px;">
+            还有 {{ comparison.matches|length - 3 }} 个匹配项...
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Enhanced JavaScript -->
+<script>
+// Enhanced plagiarism analysis interface
+class EnhancedPlagiarismAnalyzer {
+  constructor() {
+    this.currentData = {{ plagiarism_data | tojson if plagiarism_data else '{}' }};
+    this.initializeInterface();
+    this.setupEventListeners();
+    this.renderCharts();
+  }
+
+  initializeInterface() {
+    // Initialize similarity threshold slider
+    const slider = document.getElementById('similarity-threshold');
+    const valueDisplay = document.getElementById('threshold-value');
+    
+    if (slider && valueDisplay) {
+      slider.oninput = (e) => {
+        valueDisplay.textContent = e.target.value + '%';
+        this.filterByThreshold(parseFloat(e.target.value) / 100);
+      };
+    }
+  }
+
+  setupEventListeners() {
+    // Sort method change
+    const sortSelect = document.getElementById('sort-method');
+    if (sortSelect) {
+      sortSelect.addEventListener('change', (e) => {
+        this.sortResults(e.target.value);
+      });
+    }
+
+    // Display mode change
+    const displaySelect = document.getElementById('display-mode');
+    if (displaySelect) {
+      displaySelect.addEventListener('change', (e) => {
+        this.changeDisplayMode(e.target.value);
+      });
+    }
+  }
+
+  renderCharts() {
+    this.renderSimilarityChart();
+    this.renderRiskAnalysis();
+  }
+
+  renderSimilarityChart() {
+    const chartContainer = document.getElementById('similarity-chart');
+    if (!chartContainer || !this.currentData.distribution) return;
+
+    const distribution = this.currentData.distribution;
+    const categories = ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'];
+    const values = [
+      distribution.very_low || 0,
+      distribution.low || 0,
+      distribution.medium || 0,
+      distribution.high || 0,
+      distribution.very_high || 0
+    ];
+
+    const maxValue = Math.max(...values);
+    
+    chartContainer.innerHTML = categories.map((category, index) => {
+      const height = maxValue > 0 ? (values[index] / maxValue) * 100 : 0;
+      return `
+        <div class="chart-bar" style="height: ${height}%;">
+          <div class="chart-value">${values[index]}</div>
+          <div class="chart-label">${category}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderRiskAnalysis() {
+    const riskContainer = document.getElementById('risk-analysis');
+    if (!riskContainer || !this.currentData) return;
+
+    const highRisk = this.currentData.high_similarity_count || 0;
+    const totalComparisons = this.currentData.total_comparisons || 1;
+    const riskPercentage = (highRisk / totalComparisons * 100).toFixed(1);
+
+    let riskLevel = 'low';
+    let riskColor = '#10b981';
+    let riskText = '低风险';
+
+    if (riskPercentage > 20) {
+      riskLevel = 'high';
+      riskColor = '#ef4444';
+      riskText = '高风险';
+    } else if (riskPercentage > 10) {
+      riskLevel = 'medium';
+      riskColor = '#f59e0b';
+      riskText = '中风险';
+    }
+
+    riskContainer.innerHTML = `
+      <div style="text-align: center;">
+        <div style="font-size: 3rem; color: ${riskColor}; margin-bottom: 10px;">
+          ${riskPercentage}%
+        </div>
+        <div style="font-size: 1.2rem; font-weight: 600; color: ${riskColor};">
+          ${riskText}
+        </div>
+        <div style="margin-top: 15px; color: #6b7280;">
+          ${highRisk} / ${totalComparisons} 对比较为高相似度
+        </div>
+      </div>
+    `;
+  }
+
+  filterByThreshold(threshold) {
+    const comparisons = document.querySelectorAll('.comparison-card');
+    comparisons.forEach(card => {
+      const scoreElement = card.querySelector('.score-value');
+      if (scoreElement) {
+        const score = parseFloat(scoreElement.textContent) / 100;
+        card.style.display = score >= threshold ? 'block' : 'none';
+      }
+    });
+  }
+
+  sortResults(method) {
+    const grid = document.getElementById('comparison-grid');
+    if (!grid) return;
+
+    const cards = Array.from(grid.children);
+    
+    cards.sort((a, b) => {
+      switch (method) {
+        case 'similarity':
+          const scoreA = parseFloat(a.querySelector('.score-value').textContent);
+          const scoreB = parseFloat(b.querySelector('.score-value').textContent);
+          return scoreB - scoreA;
+        case 'cluster':
+          // Sort by cluster size if available
+          return 0;
+        case 'risk':
+          // Sort by risk level
+          return 0;
+        default:
+          return 0;
+      }
+    });
+
+    // Re-append sorted cards
+    cards.forEach(card => grid.appendChild(card));
+  }
+
+  changeDisplayMode(mode) {
+    const grid = document.getElementById('comparison-grid');
+    if (!grid) return;
+
+    grid.className = 'comparison-grid';
+    grid.classList.add(`display-${mode}`);
+
+    // Add specific styling for different modes
+    switch (mode) {
+      case 'list':
+        grid.style.gridTemplateColumns = '1fr';
+        break;
+      case 'timeline':
+        grid.style.display = 'flex';
+        grid.style.flexDirection = 'column';
+        break;
+      default:
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
+        grid.style.display = 'grid';
+    }
+  }
+
+  async refreshAnalysis() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<span class="loading-spinner"></span> 刷新中...';
+    button.disabled = true;
+
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // In real implementation, fetch new data here
+      this.renderCharts();
+      
+    } catch (error) {
+      console.error('Failed to refresh analysis:', error);
+    } finally {
+      button.innerHTML = originalText;
+      button.disabled = false;
+    }
+  }
+}
+
+// Global functions
+function showDetailedComparison(first, second) {
+  // Open detailed comparison in modal or new page
+  const url = `/api/v1/jplag/enhanced/comparison/detailed/enhanced`;
+  const data = {
+    analysis_id: 'current',
+    first_submission: first,
+    second_submission: second
+  };
+
+  // For now, just show an alert
+  alert(`显示 ${first} vs ${second} 的详细比较`);
+  
+  // In real implementation:
+  // window.open(`/comparison/${first}/${second}`, '_blank');
+}
+
+function exportReport() {
+  // Export functionality
+  const data = analyzer.currentData;
+  const reportContent = JSON.stringify(data, null, 2);
+  const blob = new Blob([reportContent], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `plagiarism_report_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+
+function refreshAnalysis() {
+  if (window.analyzer) {
+    analyzer.refreshAnalysis();
+  }
+}
+
+function showAdvancedSettings() {
+  alert('高级设置功能开发中...');
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+  window.analyzer = new EnhancedPlagiarismAnalyzer();
+});
+</script>
+
+{% endblock %}
