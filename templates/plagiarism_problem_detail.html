@@ -734,7 +734,15 @@
             <div class="language-item">
               <div class="language-header">
                 <div class="language-name">
-                  <div class="language-icon">{{ lang_result.language[:2]|upper }}</div>
+                  <div class="language-icon">
+                    {% if lang_result.language|length >= 2 %}
+                      {{ lang_result.language[0]|upper }}{{ lang_result.language[1]|upper }}
+                    {% elif lang_result.language|length == 1 %}
+                      {{ lang_result.language[0]|upper }}
+                    {% else %}
+                      UN
+                    {% endif %}
+                  </div>
                   <span>{{ lang_result.language|title }}</span>
                 </div>
                 <div class="similarity-score {% if (lang_result.max_similarity or 0) >= 0.8 %}score-high{% elif (lang_result.max_similarity or 0) >= 0.5 %}score-medium{% elif (lang_result.max_similarity or 0) > 0 %}score-low{% else %}score-none{% endif %}">
@@ -769,11 +777,13 @@
                   </svg>
                   高相似度代码对
                 </div>
-                {% for pair in lang_result.high_similarity_pairs[:5] %}
+                {% for pair in lang_result.high_similarity_pairs %}
+                {% if loop.index <= 5 %}
                 <div class="pair-item">
                   <div class="pair-users">{{ pair.user1 or 'User' }} ↔ {{ pair.user2 or 'User' }}</div>
                   <div class="pair-similarity">相似度：{{ (pair.similarity * 100)|round|int }}%</div>
                 </div>
+                {% endif %}
                 {% endfor %}
                 {% if lang_result.high_similarity_pairs|length > 5 %}
                 <div style="text-align: center; margin-top: 12px;">
